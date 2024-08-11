@@ -10,6 +10,7 @@ def main():
     window = MainWindow()
     window.setWindowTitle(APP_NAME)
     window.show()
+
     sys.exit(app.exec_())
 
 

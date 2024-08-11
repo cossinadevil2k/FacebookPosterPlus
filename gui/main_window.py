@@ -1,23 +1,28 @@
-from PyQt5.QtCore import QFile, Qt, QTextStream
+import base64
+
+from PyQt5.QtCore import QBuffer, QFile, QIODevice, Qt, QTextStream
+from PyQt5.QtGui import QIcon, QImage, QPixmap
 from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QMainWindow,
                              QVBoxLayout, QWidget)
 
 from .components import (AccountInput, ButtonPanel, Footer, Header,
                          PostContent, ProxyInput, UIDInput)
+from .resources import base64_icon, qss
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.initUI()
+        self._initUI()
 
-    def initUI(self):
+    def _initUI(self):
         central_widget = QWidget()
         main_layout = QVBoxLayout()
-
-        stylesheet = self.load_stylesheet("gui/style.qss")
+        icon_pixmap = self.base64_to_pixmap(base64_icon)
+        icon = QIcon(icon_pixmap)
+        self.setWindowIcon(icon)
+        stylesheet = self._load_stylesheet("gui/style.qss")
         self.setStyleSheet(stylesheet)
-
         header = Header()
         footer = Footer()
 
@@ -50,11 +55,11 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
-        self.set_window_size()
-        self.button_panel.get_run_button().clicked.connect(self.run_task)
-        self.button_panel.get_upload_button().clicked.connect(self.upload_photo)
+        self._set_window_size()
+        self.button_panel.get_run_button().clicked.connect(self._run_task)
+        self.button_panel.get_upload_button().clicked.connect(self._upload_photo)
 
-    def set_window_size(self):
+    def _set_window_size(self):
         screen = QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry()
         width = screen_geometry.width() * 3 / 4
@@ -64,20 +69,30 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(int(width), int(height))
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowMaximizeButtonHint)
 
-    def run_task(self):
+    def base64_to_pixmap(self, base64_str):
+        image_data = base64.b64decode(base64_str)
+        buffer = QBuffer()
+        buffer.setData(image_data)
+        buffer.open(QIODevice.ReadOnly)  # type: ignore
+        image = QImage()
+        image.loadFromData(buffer.data())
+        pixmap = QPixmap.fromImage(image)
+        return pixmap
+
+    def _run_task(self):
         proxy = self.proxy_input.get_text()
         uids = self.uid_input.get_table_data()
         accounts = self.account_input.get_table_data()
         print(
             f"Running task with proxy: {proxy}, UIDs: {uids}, Accounts: {accounts}")
 
-    def upload_photo(self):
+    def _upload_photo(self):
         print("SOS...")
 
-    def load_stylesheet(self, filename):
+    def _load_stylesheet(self, filename):
         file = QFile(filename)
         if not file.open(QFile.ReadOnly | QFile.Text):
-            print(f"Không thể mở file {filename}")
-            return ""
+            print(qss)
+            return qss
         text_stream = QTextStream(file)
         return text_stream.readAll()
