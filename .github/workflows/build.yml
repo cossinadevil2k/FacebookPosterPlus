@@ -36,10 +36,10 @@ jobs:
             Write-Error "File dist/main.exe not found."
           }
 
-      - name: Release Decompyle++
+      - name: Release
         uses: ncipollo/release-action@v1
         with:
-          name: Decompyle++ Release
+          name: Release
           tag: stable-release
           body: |
             ### Windows Build
@@ -47,7 +47,7 @@ jobs:
             - **Executable:** FacebookPosterPlus.exe
             - **Details:** Latest build for Windows.
 
-            You can download the executable from the [Assets section here](https://github.com/${{ github.repository }}/releases/tag/stable-release).
+            You can download the executable from the [here](https://github.com/${{ github.repository }}/releases/download/stable-release/FacebookPosterPlus.exe).
           artifacts: |
             dist/FacebookPosterPlus.exe
           token: ${{ secrets.TOKEN }}
