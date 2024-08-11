@@ -1,4 +1,4 @@
-![Preview](.github/image.jpg)
+![Preview](https://github.com/tripleseven190504/FacebookPosterPlus/blob/dev/.github/image.jpg)
 ### Setup
 
 1. **Cài đặt thư viện**:
