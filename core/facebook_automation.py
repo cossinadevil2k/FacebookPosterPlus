@@ -41,7 +41,7 @@ class Facebook:
             "referer": f"{self.base_url}{next_to}"
         })
         return response
-    
+
     def _get_2f_code(self):
         if not self.key_2fa:
             return "error"
@@ -50,7 +50,7 @@ class Facebook:
         data = response.json()
         token = data.get("token")
         return token
-    
+
     def _submit_2fa_and_save_browser(self, response):
         ref = BeautifulSoup(response.text, "html.parser")
         form = ref.find("form", {"method": "post", "enctype": True})
@@ -68,9 +68,8 @@ class Facebook:
         # We are in save the browser page.
         if form:
             data = {x.get("name"): x.get("value") for x in form.find_all("input", {"type": "hidden", "value": True})}
-            data.update({"submit[Continue]": "Continue"})   
-            response = self.session.post(f"{self.base_url}/login/checkpoint", data=data)
-        
+            data.update({"submit[Continue]": "Continue"})
+            self.session.post(f"{self.base_url}/login/checkpoint", data=data)
         self._format_cookies()
 
     def _format_cookies(self):
@@ -91,23 +90,46 @@ class Facebook:
                     return "Error"
             except Exception:
                 return "Error"
-        
+
         return "Error"
-    
-    def post_feed(self, target_uid=None, content=None):
-        target_wall_url = self.base_url + "/" + target_uid
+
+    def get_profile_uid(self):
+        cookies = self.session.cookies.get_dict()
+        uid = cookies.get('c_user') or cookies.get('m_page_voice')
+        if not uid:
+            raise ValueError("Không thể lấy UID từ cookie.")
+        return uid
+
+    def post_feed(self, content=None, uids=None):
+        print("Đang chuẩn bị gửi bài viết...") # TODO: "Trả trạng thái về GUI"
+        target_wall_url = f"{self.base_url}/{self.get_profile_uid()}"
         ref = BeautifulSoup(self.session.get(target_wall_url).text, "html.parser")
         form = ref.find("form", {"id": "mbasic-composer-form"})
         data = {x.get("name"): x.get("value") for x in form.find_all("input", {"type": "hidden", "value": True})}
+
+        if uids:
+            tags = []
+            for uid in uids:
+                tag = f"@[{uid[0]}:0]"
+                tags.append(tag)
+                print(f"Đang xử lý UID: {uid[0]}") # TODO: "Trả trạng thái về GUI"
+            tags_str = "".join(tags)
+            content = f"{content} {tags_str}"
+
         data.update({
-            "view_post":"Đăng",
+            "view_post": "Đăng",
             "xc_message": content,
         })
+
         url = "https://mbasic.facebook.com/composer/mbasic/"
         response = self.session.post(url, data=data)
-        
+        if response.ok:
+            print("Bài viết đã được đăng thành công.") # TODO: "Trả trạng thái về GUI"
+        else:
+            print("Có lỗi xảy ra khi gửi bài viết.") # TODO: "Trả trạng thái về GUI"
+
 fb = Facebook("test", "test", "test")
 fb.login()
-fb.post_feed("100000984031847","testttt")
-# fb.post_feed("100013855446556","testttt")
-
+# Phần trống trong danh sách UID sẽ được trả về giao diện GUI để cập nhật trạng thái.
+# table(["UID", "Trạng thái"])
+fb.post_feed(content="testttt", uids=[['100000984031847', '']])
