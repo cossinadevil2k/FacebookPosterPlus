@@ -28,8 +28,13 @@ jobs:
           python build_script.py
 
       - name: Rename executable
+        shell: pwsh
         run: |
-          Rename-Item -Path "dist/main.exe" -NewName "dist/FacebookPosterPlus.exe"
+          if (Test-Path "dist/main.exe") {
+            Move-Item -Path "dist/main.exe" -Destination "dist/FacebookPosterPlus.exe"
+          } else {
+            Write-Error "File dist/main.exe not found."
+          }
 
       - name: Release Decompyle++
         uses: ncipollo/release-action@v1
