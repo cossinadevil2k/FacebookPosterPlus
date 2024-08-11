@@ -1,4 +1,4 @@
-![Preview](.github/image.png)
+![Preview](.github/image.jpg)
 ### Setup
 
 1. **Cài đặt thư viện**:
