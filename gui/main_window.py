@@ -2,13 +2,14 @@ import base64
 
 from PyQt5.QtCore import QBuffer, QFile, QIODevice, Qt, QTextStream
 from PyQt5.QtGui import QIcon, QImage, QPixmap
-from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QMainWindow,
-                             QVBoxLayout, QWidget)
 
 from .components import (AccountInput, ButtonPanel, Footer, Header,
                          PostContent, ProxyInput, UIDInput)
 from .resources import base64_icon, qss
 
+from PyQt5.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
+                             QLabel, QLineEdit, QMessageBox, QPushButton,
+                             QTextEdit, QVBoxLayout, QWidget, QMainWindow)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -59,6 +60,8 @@ class MainWindow(QMainWindow):
         self.button_panel.get_run_button().clicked.connect(self._run_task)
         self.button_panel.get_upload_button().clicked.connect(self._upload_photo)
 
+        self.avatar = None
+
     def _set_window_size(self):
         screen = QApplication.primaryScreen()
         screen_geometry = screen.availableGeometry()
@@ -87,7 +90,21 @@ class MainWindow(QMainWindow):
             f"Running task with proxy: {proxy}, UIDs: {uids}, Accounts: {accounts}")
 
     def _upload_photo(self):
-        print("SOS...")
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+
+        file_dialog = QFileDialog(self)
+        file_dialog.setFileMode(QFileDialog.ExistingFiles)
+        file_dialog.setNameFilter("Images (*.png *.jpg *.bmp)")
+        file_dialog.setViewMode(QFileDialog.List)
+        file_dialog.setOptions(options)
+
+        if file_dialog.exec_():
+            self.avatar = file_dialog.selectedFiles()
+            QMessageBox.about(
+                self, "Thông báo", f"Đã chọn hình ảnh avatar.")
+            
+        print(self.avatar)
 
     def _load_stylesheet(self, filename):
         file = QFile(filename)
