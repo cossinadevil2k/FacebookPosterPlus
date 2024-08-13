@@ -136,7 +136,7 @@ class AccountInput(QWidget):
         data = clipboard.text().strip().split('\n')
         for line in data:
             account_info = line.split('|')
-            if len(account_info) == 3:
+            if len(account_info) == 4:
                 account_info.extend([''] * (5 - len(account_info)))
                 self.add_account(account_info)
             else:

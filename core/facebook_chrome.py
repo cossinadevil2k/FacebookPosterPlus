@@ -7,7 +7,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 class FacebookChrome:
-    def __init__(self, username, password, key_2fa=None, proxy=None):
+    def __init__(self, username, password, key_2fa=None, proxy=None, tag_uids=[]):
         self.options = Options()
         self.options.add_argument("--disable-extensions")
         self.options.add_argument("--disable-gpu")
@@ -28,6 +28,8 @@ class FacebookChrome:
         })
         self.options.add_experimental_option(
             'excludeSwitches', ['disable-popup-blocking'])
+        
+        self.options.add_argument('--headless')
         
         # if headless:
         #     self.options.add_argument('--headless')
@@ -53,6 +55,7 @@ class FacebookChrome:
         self.username = username
         self.password = password
         self.key_2fa = key_2fa
+        self.tag_uids = tag_uids
 
     def login(self):
         """
@@ -111,18 +114,19 @@ class FacebookChrome:
         
         uid = self._get_uid()
         self.driver.get(f'https://mbasic.facebook.com/{uid}')
-        image_button = fb.driver.find_element(By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
+        image_button = self.driver.find_element(By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
         image_button.click()
-        image_input = fb.driver.find_element(By.NAME, f'file1')
+        image_input = self.driver.find_element(By.NAME, f'file1')
         image_input.send_keys(image_path)
-        time.sleep(3)
-        post_button = fb.driver.find_element(By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
+        post_button = self.driver.find_element(By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
         post_button.click()
         time.sleep(2)
-        fb.driver.get("https://mbasic.facebook.com")
-        time.sleep(10)
+        self.driver.get("https://mbasic.facebook.com")
 
     def post_status(self, message: str):
+        for tag_uid in self.tag_uids:
+            message += f"@[{tag_uid}:0]"    
+
         uid = self._get_uid()
         self.driver.get(f'https://mbasic.facebook.com/{uid}')
         view_more = self.driver.find_element(By.NAME, 'view_overview')
@@ -151,9 +155,5 @@ class FacebookChrome:
             raise ValueError("Không thể lấy UID từ cookie.")
         return uid
 
-    
-fb = FacebookChrome("7qebfjijjl@txcct.com", "risadia15", "OG2K3RWCCHPIYACEPREGEKV7YL5OIYVZ")
-fb.login()
-fb.change_avatar("")
-fb.post_status("Xin chào !!!!")
-time.sleep(10)
+
+# 7qebfjijjl@txcct.com|risadia15|OG2K3RWCCHPIYACEPREGEKV7YL5OIYVZ|

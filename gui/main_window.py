@@ -1,15 +1,21 @@
 import base64
 
-from PyQt5.QtCore import QBuffer, QFile, QIODevice, Qt, QTextStream
+from PyQt5.QtCore import QBuffer, QFile, QIODevice, Qt, QTextStream, pyqtSignal
 from PyQt5.QtGui import QIcon, QImage, QPixmap
 
 from .components import (AccountInput, ButtonPanel, Footer, Header,
-                         PostContent, ProxyInput, UIDInput)
+                         PostContent, ProxyInput, UIDInput, Username)
 from .resources import base64_icon, qss
 
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
                              QLabel, QLineEdit, QMessageBox, QPushButton,
                              QTextEdit, QVBoxLayout, QWidget, QMainWindow)
+
+from PyQt5.QtCore import QBuffer, QIODevice, Qt, QThread, pyqtSignal
+from core.facebook_chrome import FacebookChrome
+import json
+import time
+import re
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -88,6 +94,28 @@ class MainWindow(QMainWindow):
         accounts = self.account_input.get_table_data()
         print(
             f"Running task with proxy: {proxy}, UIDs: {uids}, Accounts: {accounts}")
+        
+        for account in accounts:
+            username, password, key_2fa, cookie, _ = account
+            self.thread: Worker = Worker(username, password, key_2fa, proxy, self.post_content.get_content(), self.avatar)
+            self.thread.result_signal.connect(self.handle_result)
+            self.thread.start()
+
+    def handle_result(self, result):
+        try:
+            result_dict = json.loads(result)
+            status = result_dict.get("status")
+            message = result_dict.get("message")
+
+            if status == "ERROR":
+                QMessageBox.critical(self, "Lỗi", message)
+            else:
+                QMessageBox.information(
+                    self, "Thành công", "Hoạt động đã hoàn tất thành công")
+        except json.JSONDecodeError:
+            QMessageBox.critical(
+                self, "Lỗi", "Dữ liệu trả về không hợp lệ")
+        
 
     def _upload_photo(self):
         options = QFileDialog.Options()
@@ -113,3 +141,64 @@ class MainWindow(QMainWindow):
             return qss
         text_stream = QTextStream(file)
         return text_stream.readAll()
+
+
+class Worker(QThread):
+    result_signal = pyqtSignal(str)
+
+    def __init__(self, username, password, key_2fa, proxy, content, avatar_path):
+        super().__init__()
+        self.username = username
+        self.password = password
+        self.key_2fa = key_2fa
+        self.proxy = proxy
+        self.content = content
+        self.avatar_path = avatar_path
+
+    def run(self):
+        if self.username == '' or self.password == '' or self.key_2fa == '':
+            self.result_signal.emit(
+                '{"status": "ERROR", "message": "Chưa điền đủ thông tin đăng nhập"}')
+            return
+        elif self.content == '':
+            self.result_signal.emit(
+                '{"status": "ERROR", "message": "Chưa nhập nội dung bài viết"}')
+            return
+        if self.proxy != '' and not validate_proxy(self.proxy):
+            self.result_signal.emit(
+                '{"status": "ERROR", "message": "Proxy không hợp lệ"}')
+            return
+        try:
+            chrome = FacebookChrome(
+                self.username,
+                self.password,
+                self.key_2fa,
+                self.proxy
+            )
+        except Exception as e:
+            self.result_signal.emit(
+                '{"status": "ERROR", "message": "' + str(e) + '"}')
+            return
+        status = chrome.login()
+        if status != 'SUCCESS':
+            self.result_signal.emit(
+                '{"status": "ERROR", "message": "Thông tin tài khoản không hợp lệ"}')
+            return
+        try:
+            if self.avatar_path:
+                chrome.change_avatar(self.avatar_path)
+            
+            time.sleep(1)
+
+            chrome.post_status(self.content)
+        except FileNotFoundError:
+            self.result_signal.emit(
+                '{"status": "ERROR", "message": "Vui lòng lấy danh sách group trước!"}')
+        except Exception as e:
+            self.result_signal.emit(
+                '{"status": "ERROR", "message": "' + str(e) + '"}')
+            
+
+def validate_proxy(proxy):
+    pattern = r'^[^:]+:\d+$'
+    return re.match(pattern, proxy) is not None
