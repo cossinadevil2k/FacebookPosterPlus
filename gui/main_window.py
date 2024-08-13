@@ -4,12 +4,11 @@ from PyQt5.QtCore import QBuffer, QFile, QIODevice, Qt, QTextStream, pyqtSignal
 from PyQt5.QtGui import QIcon, QImage, QPixmap
 
 from .components import (AccountInput, ButtonPanel, Footer, Header,
-                         PostContent, ProxyInput, UIDInput, Username)
+                         PostContent, ProxyInput, UIDInput)
 from .resources import base64_icon, qss
 
-from PyQt5.QtWidgets import (QApplication, QCheckBox, QFileDialog, QHBoxLayout,
-                             QLabel, QLineEdit, QMessageBox, QPushButton,
-                             QTextEdit, QVBoxLayout, QWidget, QMainWindow)
+from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout,
+                             QMessageBox, QVBoxLayout, QWidget, QMainWindow)
 
 from PyQt5.QtCore import QBuffer, QIODevice, Qt, QThread, pyqtSignal
 from core.facebook_chrome import FacebookChrome
