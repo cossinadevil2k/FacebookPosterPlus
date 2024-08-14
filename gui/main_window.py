@@ -11,6 +11,7 @@ from core import FacebookChrome
 from .components import (AccountInput, ButtonPanel, Footer, Header,
                          PostContent, ProxyInput, UIDInput)
 from .resources import base64_icon, qss
+import json
 
 BATCH_UID = 2
 
@@ -43,8 +44,10 @@ class WorkerThread(QThread):
         if "LỖI" in login_status:
             self.finished.emit("ĐĂNG NHẬP THẤT BẠI")
             return
-        # cookies = self.facebook_instance.get_cookies()
-        # self.update_cookies.emit(self.index, cookies)
+
+        cookies = self.facebook_instance.get_cookies()
+        cookies_str = json.dumps(cookies)
+        self.update_cookies.emit(self.index, cookies_str)
 
         if login_status == "ĐĂNG NHẬP THÀNH CÔNG" and self.avatar_file_path:
             avatar_status = self.facebook_instance.change_avatar(
