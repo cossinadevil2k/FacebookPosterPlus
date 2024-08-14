@@ -1,20 +1,18 @@
 import base64
+import threading
 
-from PyQt5.QtCore import QBuffer, QFile, QIODevice, Qt, QTextStream, pyqtSignal
+from PyQt5.QtCore import QBuffer, QIODevice, Qt
 from PyQt5.QtGui import QIcon, QImage, QPixmap
+from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QMainWindow,
+                             QMessageBox, QTableWidgetItem, QVBoxLayout,
+                             QWidget)
+
+from core import FacebookChrome
 
 from .components import (AccountInput, ButtonPanel, Footer, Header,
                          PostContent, ProxyInput, UIDInput)
 from .resources import base64_icon, qss
 
-from PyQt5.QtWidgets import (QApplication, QFileDialog, QHBoxLayout,
-                             QMessageBox, QVBoxLayout, QWidget, QMainWindow)
-
-from PyQt5.QtCore import QBuffer, QIODevice, Qt, QThread, pyqtSignal
-from core.facebook_chrome import FacebookChrome
-import json
-import time
-import re
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -27,8 +25,7 @@ class MainWindow(QMainWindow):
         icon_pixmap = self.base64_to_pixmap(base64_icon)
         icon = QIcon(icon_pixmap)
         self.setWindowIcon(icon)
-        stylesheet = self._load_stylesheet("gui/style.qss")
-        self.setStyleSheet(stylesheet)
+        self.setStyleSheet(qss)
         header = Header()
         footer = Footer()
 
@@ -63,7 +60,6 @@ class MainWindow(QMainWindow):
 
         self._set_window_size()
         self.button_panel.get_run_button().clicked.connect(self._run_task)
-        self.button_panel.get_upload_button().clicked.connect(self._upload_photo)
 
         self.avatar = None
 
@@ -89,115 +85,59 @@ class MainWindow(QMainWindow):
 
     def _run_task(self):
         proxy = self.proxy_input.get_text()
-        uids = self.uid_input.get_table_data()
-        accounts = self.account_input.get_table_data()
-        print(
-            f"Running task with proxy: {proxy}, UIDs: {uids}, Accounts: {accounts}")
-        
-        for account in accounts:
-            username, password, key_2fa, cookie, _ = account
-            self.thread: Worker = Worker(username, password, key_2fa, proxy, self.post_content.get_content(), self.avatar)
-            self.thread.result_signal.connect(self.handle_result)
-            self.thread.start()
+        user_ids = self.uid_input.get_table_data()
+        account_list = self.account_input.get_table_data()
+        avatar_file_path = self.button_panel.get_image_path()
+        post_content = self.post_content.get_content()
 
-    def handle_result(self, result):
-        try:
-            result_dict = json.loads(result)
-            status = result_dict.get("status")
-            message = result_dict.get("message")
-
-            if status == "ERROR":
-                QMessageBox.critical(self, "Lỗi", message)
-            else:
-                QMessageBox.information(
-                    self, "Thành công", "Hoạt động đã hoàn tất thành công")
-        except json.JSONDecodeError:
-            QMessageBox.critical(
-                self, "Lỗi", "Dữ liệu trả về không hợp lệ")
-        
-
-    def _upload_photo(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.ReadOnly
-
-        file_dialog = QFileDialog(self)
-        file_dialog.setFileMode(QFileDialog.ExistingFiles)
-        file_dialog.setNameFilter("Images (*.png *.jpg *.bmp)")
-        file_dialog.setViewMode(QFileDialog.List)
-        file_dialog.setOptions(options)
-
-        if file_dialog.exec_():
-            self.avatar = file_dialog.selectedFiles()
-            QMessageBox.about(
-                self, "Thông báo", f"Đã chọn hình ảnh avatar.")
-            
-        print(self.avatar)
-
-    def _load_stylesheet(self, filename):
-        file = QFile(filename)
-        if not file.open(QFile.ReadOnly | QFile.Text):
-            print(qss)
-            return qss
-        text_stream = QTextStream(file)
-        return text_stream.readAll()
-
-
-class Worker(QThread):
-    result_signal = pyqtSignal(str)
-
-    def __init__(self, username, password, key_2fa, proxy, content, avatar_path):
-        super().__init__()
-        self.username = username
-        self.password = password
-        self.key_2fa = key_2fa
-        self.proxy = proxy
-        self.content = content
-        self.avatar_path = avatar_path
-
-    def run(self):
-        if self.username == '' or self.password == '' or self.key_2fa == '':
-            self.result_signal.emit(
-                '{"status": "ERROR", "message": "Chưa điền đủ thông tin đăng nhập"}')
+        if not post_content:
+            self.button_panel.toggle_run_state()
+            QMessageBox.critical(self, "Lỗi", "Chưa điền nội dung bài đăng!")
             return
-        elif self.content == '':
-            self.result_signal.emit(
-                '{"status": "ERROR", "message": "Chưa nhập nội dung bài viết"}')
-            return
-        if self.proxy != '' and not validate_proxy(self.proxy):
-            self.result_signal.emit(
-                '{"status": "ERROR", "message": "Proxy không hợp lệ"}')
-            return
-        try:
-            chrome = FacebookChrome(
-                self.username,
-                self.password,
-                self.key_2fa,
-                self.proxy
-            )
-        except Exception as e:
-            self.result_signal.emit(
-                '{"status": "ERROR", "message": "' + str(e) + '"}')
-            return
-        status = chrome.login()
-        if status != 'SUCCESS':
-            self.result_signal.emit(
-                '{"status": "ERROR", "message": "Thông tin tài khoản không hợp lệ"}')
-            return
-        try:
-            if self.avatar_path:
-                chrome.change_avatar(self.avatar_path)
-            
-            time.sleep(1)
 
-            chrome.post_status(self.content)
-        except FileNotFoundError:
-            self.result_signal.emit(
-                '{"status": "ERROR", "message": "Vui lòng lấy danh sách group trước!"}')
-        except Exception as e:
-            self.result_signal.emit(
-                '{"status": "ERROR", "message": "' + str(e) + '"}')
-            
+        if not user_ids:
+            self.button_panel.toggle_run_state()
+            QMessageBox.critical(self, "Lỗi", "Chưa cung cấp UID!")
+            return
 
-def validate_proxy(proxy):
-    pattern = r'^[^:]+:\d+$'
-    return re.match(pattern, proxy) is not None
+        def process_facebook_account(index, account_details):
+            facebook_instance = FacebookChrome(
+                username=account_details[0], password=account_details[1], proxy=proxy)
+            login_status = facebook_instance.login()
+            self.account_input.set_status(
+                index, f"{login_status}")
+            if "LỖI" in login_status:
+                self.account_input.set_status_color(index, "red")
+            self.account_input.table.setItem(index, 3, QTableWidgetItem(
+                facebook_instance.get_cookie().get('c_user', 'COOKIE NOT FOUND')))
+            if login_status == "ĐĂNG NHẬP THÀNH CÔNG" and avatar_file_path:
+                avatar_status = facebook_instance.change_avatar(
+                    avatar_file_path)
+                status_message = f"{avatar_status}"
+                self.account_input.set_status(index, status_message)
+                if "LỖI" in avatar_status:
+                    self.account_input.set_status_color(index, "red")
+                QApplication.processEvents()
+
+            if login_status == "ĐĂNG NHẬP THÀNH CÔNG":
+                post_status = facebook_instance.post_status(
+                    post_content, user_ids)
+                self.uid_input.set_status('THÀNH CÔNG')
+                status_message = f"{post_status}"
+                self.account_input.set_status(index, status_message)
+                if "LỖI" in post_status:
+                    self.account_input.set_status_color(index, "red")
+                else:
+                    self.account_input.set_status_color(index, "green")
+                QApplication.processEvents()
+
+        threads = []
+        for index, account in enumerate(account_list):
+            thread = threading.Thread(
+                target=process_facebook_account, args=(index, account))
+            threads.append(thread)
+            thread.start()
+        for thread in threads:
+            thread.join()
+        QMessageBox.information(
+            self, "Hoàn thành", "Tất cả các tác vụ đã hoàn thành.")

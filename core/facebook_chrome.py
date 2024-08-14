@@ -1,4 +1,3 @@
-import re
 import time
 
 import requests
@@ -6,9 +5,11 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
+
 class FacebookChrome:
-    def __init__(self, username, password, key_2fa=None, proxy=None, tag_uids=[]):
+    def __init__(self, username, password, key_2fa=None, proxy=None):
         self.options = Options()
+        # self.options.add_argument('--headless')
         self.options.add_argument("--disable-extensions")
         self.options.add_argument("--disable-gpu")
         self.options.add_argument('--deny-permission-prompts')
@@ -28,48 +29,36 @@ class FacebookChrome:
         })
         self.options.add_experimental_option(
             'excludeSwitches', ['disable-popup-blocking'])
-        
-        self.options.add_argument('--headless')
-        
-        # if headless:
-        #     self.options.add_argument('--headless')
-        # if not enable_images:
-        #     self.options.add_argument('--blink-settings=imagesEnabled=false')
-        #     prefs = {"profile.managed_default_content_settings.images": 2}
-        #     self.options.add_experimental_option("prefs", prefs)
-        # if not enable_css:
-        #     self.options.add_experimental_option(
-        #         "prefs", {"profile.managed_default_content_settings.stylesheets": 2})
-        #     self.options.set_capability(
-        #         'goog:loggingPrefs', {'browser': 'ALL'})
-        # if proxy:
-        #     self.options.add_argument(f"--proxy-server={proxy}")
+        if proxy:
+            self.options.add_argument(f"--proxy-server={proxy}")
 
         self.driver = webdriver.Chrome(options=self.options)
         self.driver.get('https://mbasic.facebook.com')
-        cookie = {
-            'name': 'locale',
-            'value': 'en_GB'
-        }
+        cookie = {'name': 'locale', 'value': 'en_GB'}
         self.driver.add_cookie(cookie)
         self.username = username
         self.password = password
         self.key_2fa = key_2fa
-        self.tag_uids = tag_uids
+
+    def _get_code_2fa(self, key_2fa: str):
+        url = f"https://2fa.live/tok/{key_2fa}"
+        response = requests.get(url)
+        data = response.json()
+        return data.get("token")
+
+    def _get_uid(self):
+        cookies = self.driver.get_cookies()
+        for cookie in cookies:
+            if cookie["name"] == "c_user":
+                return cookie["value"]
+        self.driver.quit()
+        return None
+
+    def get_cookie(self):
+        cookies = self.driver.get_cookies()
+        return {cookie['name']: cookie['value'] for cookie in cookies}
 
     def login(self):
-        """
-        ---
-        Đăng nhập vào Facebook
-        ---
-        ### Các tham số:
-            - username (str): Tên người Facebook.
-            - password (str): Mật khẩu Facebook
-            - key_2fa (str): KEY 2FA để lấy mã xác thực.
-        ---
-        ### Trả về:
-            - str: "SUCCESS" nếu đăng nhập thành công, "FAILED" nếu sai pass hoặc sai 2FA
-        """
         self.driver.get('https://mbasic.facebook.com')
         username_input = self.driver.find_element(By.ID, 'm_login_email')
         username_input.clear()
@@ -80,7 +69,8 @@ class FacebookChrome:
         login_button = self.driver.find_element(By.NAME, 'login')
         login_button.click()
         if 'https://mbasic.facebook.com/login/' in self.driver.current_url:
-            return "FAILED"
+            self.driver.quit()
+            return "LỖI ĐĂNG NHẬP"
         if 'https://mbasic.facebook.com/checkpoint/?_rdr' in self.driver.current_url:
             code_2fa = self._get_code_2fa(self.key_2fa)
             code_2fa_input = self.driver.find_element(
@@ -93,7 +83,8 @@ class FacebookChrome:
             if 'https://mbasic.facebook.com/login/checkpoint/' in self.driver.current_url:
                 for i in range(10):
                     if i == 9:
-                        return "FAILED"
+                        self.driver.quit()
+                        return "LỖI ĐĂNG NHẬP"
                     try:
                         this_was_me_button = self.driver.find_element(
                             By.NAME, 'submit[This was me]')
@@ -106,28 +97,35 @@ class FacebookChrome:
                     submit_button.click()
                     if 'https://mbasic.facebook.com/login/checkpoint/' not in self.driver.current_url:
                         break
-        return "SUCCESS"
-    
+        return "ĐĂNG NHẬP THÀNH CÔNG"
+
     def change_avatar(self, image_path):
         if not image_path:
-            return "Can not upload image"
-        
+            return "LỖI: KHÔNG CUNG CẤP ẢNH"
         uid = self._get_uid()
+        if not uid:
+            return "LỖI: KHÔNG TÌM THẤY UID"
         self.driver.get(f'https://mbasic.facebook.com/{uid}')
-        image_button = self.driver.find_element(By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
+        image_button = self.driver.find_element(
+            By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
         image_button.click()
-        image_input = self.driver.find_element(By.NAME, f'file1')
+        image_input = self.driver.find_element(By.NAME, 'file1')
         image_input.send_keys(image_path)
-        post_button = self.driver.find_element(By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
+        time.sleep(3)
+        post_button = self.driver.find_element(
+            By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
         post_button.click()
         time.sleep(2)
         self.driver.get("https://mbasic.facebook.com")
+        time.sleep(10)
+        return "ĐỔI AVATAR THÀNH CÔNG"
 
-    def post_status(self, message: str):
-        for tag_uid in self.tag_uids:
-            message += f"@[{tag_uid}:0]"    
-
+    def post_status(self, message: str, uids: str):
+        if not uids:
+            return "LỖI: KHÔNG CUNG CẤP UID"
         uid = self._get_uid()
+        if not uid:
+            return "LỖI: KHÔNG TÌM THẤY UID"
         self.driver.get(f'https://mbasic.facebook.com/{uid}')
         view_more = self.driver.find_element(By.NAME, 'view_overview')
         view_more.click()
@@ -135,25 +133,4 @@ class FacebookChrome:
         text_area.send_keys(message)
         post_button = self.driver.find_element(By.NAME, 'view_post')
         post_button.click()
-        return "SUCCESS"
-
-
-    def _get_code_2fa(self, key_2fa: str):
-        url = f"https://2fa.live/tok/{key_2fa}"
-        response = requests.get(url)
-        data = response.json()
-        return data.get("token")
-    
-    def _get_uid(self):
-        cookies = self.driver.get_cookies()
-        for cookie in cookies:
-            if cookie["name"] == "c_user":
-                uid = cookie["value"]
-                break
-
-        if not uid:
-            raise ValueError("Không thể lấy UID từ cookie.")
-        return uid
-
-
-# 7qebfjijjl@txcct.com|risadia15|OG2K3RWCCHPIYACEPREGEKV7YL5OIYVZ|
+        return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
