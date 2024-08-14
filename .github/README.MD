@@ -1,12 +1,23 @@
+# FacebookPosterPlus 🎉
+
 ![Preview](https://github.com/tripleseven190504/FacebookPosterPlus/blob/dev/.github/image.jpg)
-### Setup
 
-1. **Cài đặt thư viện**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+### Cách sử dụng ứng dụng 🔧
 
-2. **Chạy ứng dụng**:
-    ```bash
-    python main.py
-    ```
+Bạn có thể lựa chọn một trong hai cách để sử dụng **FacebookPosterPlus**:
+
+1. **Chạy trực tiếp từ binary (Windows)**:
+   - **Tải xuống** và **chạy** tệp **[FacebookPosterPlus.exe](https://github.com/tripleseven190504/FacebookPosterPlus/releases/download/stable-release/FacebookPosterPlus.exe)**
+
+2. **Build từ source (macOS/Linux)**:
+   - **Cài đặt các thư viện cần thiết** 📦:
+
+     ```bash
+     pip install -r requirements.txt
+     ```
+
+   - **Chạy ứng dụng** ▶️:
+
+     ```bash
+     python main.py
+     ```
