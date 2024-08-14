@@ -247,7 +247,6 @@ class ButtonPanel(QWidget):
             file_path = file_dialog.selectedFiles()[0]
             if file_path:
                 file_name = os.path.basename(file_path)
-                print("Đã chọn ảnh đại diện:", file_path)
                 self.upload_button.setText(f"Đã chọn: {file_name}")
                 self.image_path = file_path
 
