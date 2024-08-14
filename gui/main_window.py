@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 
 from PyQt5.QtCore import QBuffer, QIODevice, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QImage, QPixmap
@@ -12,8 +13,10 @@ from core import FacebookChrome
 from .components import (AccountInput, ButtonPanel, Footer, Header,
                          PostContent, ProxyInput, UIDInput)
 from .resources import base64_icon, qss
+import math
 
 BATCH_UID = 50
+RUN_BATCH = 5
 
 
 class WorkerThread(QThread):
@@ -189,20 +192,27 @@ class MainWindow(QMainWindow):
         self.worker_count = len(account_list)
         self.completed_workers = 0
 
-        for index, account in enumerate(account_list):
-            uids = user_ids[(index*BATCH_UID): (index*BATCH_UID) + BATCH_UID]
+        batch_size = math.ceil(len(account_list) / RUN_BATCH)
 
-            if not uids:
-                uids = user_ids[:BATCH_UID]
+        for batch in range(batch_size):
+            batch_account = account_list[(batch*RUN_BATCH) : (batch*RUN_BATCH) + RUN_BATCH]
+            for idx, account in enumerate(batch_account):
+                index = (batch * RUN_BATCH) + idx
+                uids = user_ids[(index*BATCH_UID): (index*BATCH_UID) + BATCH_UID]
 
-            worker = WorkerThread(index, account, proxy,
-                                  post_content, uids, avatar_file_path)
-            worker.update_status.connect(update_status)
-            worker.update_uid_status.connect(update_uid_status)
-            worker.update_cookies.connect(update_cookies)
-            worker.finished.connect(worker_finished)
-            self.workers.append(worker)
-            worker.start()
+                if not uids:
+                    uids = user_ids[:BATCH_UID]
+
+                worker = WorkerThread(index, account, proxy,
+                                    post_content, uids, avatar_file_path)
+                worker.update_status.connect(update_status)
+                worker.update_uid_status.connect(update_uid_status)
+                worker.update_cookies.connect(update_cookies)
+                worker.finished.connect(worker_finished)
+                self.workers.append(worker)
+                worker.start()
+            
+            worker.wait()
 
     def stop_all_workers(self):
         for worker in self.workers:

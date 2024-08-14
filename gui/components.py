@@ -153,19 +153,30 @@ class AccountInput(QWidget):
         data = clipboard.text().strip().split('\n')
         for line in data:
             account_info = line.split('|')
-            if 3 <= len(account_info) <= 4:
-                account_info.extend([''] * (5 - len(account_info)))
-                self.add_account(account_info)
-            else:
-                self.show_error_message(
-                    f"Dữ liệu đầu vào không hợp lệ: {line}")
-                break
+            self.add_account(account_info)
 
     def add_account(self, account_info):
+        column_mapping = {
+            'username': 0,
+            'password': 1,
+            'key_2fa': 2,
+            'cookie': 3,
+        }
         row_position = self.table.rowCount()
         self.table.insertRow(row_position)
         for i, info in enumerate(account_info):
-            self.table.setItem(row_position, i, QTableWidgetItem(info))
+            if "@" in info or info.isdigit():  # username
+                column_position = column_mapping["username"]
+            elif len(info) == 32:  # key_2fa
+                column_position = column_mapping["key_2fa"]
+            elif "datr=" in info:  # cookie
+                column_position = column_mapping["cookie"]
+            else:
+                column_position = column_mapping["password"]
+            self.table.setItem(row_position, column_position, QTableWidgetItem(info))
+        
+        # status need to be added manually
+        self.table.setItem(row_position, 4, QTableWidgetItem(""))
 
     def get_table_data(self):
         data = []
