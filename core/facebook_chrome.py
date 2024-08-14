@@ -1,5 +1,7 @@
 import random
+import re
 import time
+from typing import Dict, List, Optional, Union
 
 import requests
 from selenium import webdriver
@@ -8,7 +10,7 @@ from selenium.webdriver.common.by import By
 
 
 class FacebookChrome:
-    def __init__(self, username, password, key_2fa=None, proxy=None):
+    def __init__(self, username: str, password: str, key_2fa: Optional[str] = None, proxy: Optional[str] = None):
         self.options = Options()
         # self.options.add_argument('--headless')
         self.options.add_argument("--disable-extensions")
@@ -41,13 +43,13 @@ class FacebookChrome:
         self.password = password
         self.key_2fa = key_2fa
 
-    def _get_code_2fa(self, key_2fa: str):
+    def _get_code_2fa(self, key_2fa: str) -> Optional[str]:
         url = f"https://2fa.live/tok/{key_2fa}"
         response = requests.get(url)
         data = response.json()
         return data.get("token")
 
-    def _get_uid(self):
+    def _get_uid(self) -> Optional[str]:
         cookies = self.driver.get_cookies()
         for cookie in cookies:
             if cookie["name"] == "c_user":
@@ -55,11 +57,12 @@ class FacebookChrome:
         self.driver.quit()
         return None
 
-    def get_cookies(self):
+    def get_cookies(self) -> Dict[str, str]:
         cookies = self.driver.get_cookies()
         return {cookie['name']: cookie['value'] for cookie in cookies}
 
-    def login(self):
+    def login(self) -> str:
+        LOGIN_ERROR_MESSAGE = "LỖI ĐĂNG NHẬP"
         self.driver.get('https://mbasic.facebook.com')
         username_input = self.driver.find_element(By.ID, 'm_login_email')
         username_input.clear()
@@ -71,36 +74,41 @@ class FacebookChrome:
         login_button.click()
         if 'https://mbasic.facebook.com/login/' in self.driver.current_url:
             self.driver.quit()
-            return "LỖI ĐĂNG NHẬP"
+            return LOGIN_ERROR_MESSAGE
         if 'https://mbasic.facebook.com/checkpoint/?_rdr' in self.driver.current_url:
-            code_2fa = self._get_code_2fa(self.key_2fa)
+            code_2fa = self._get_code_2fa(self.key_2fa or '')
             code_2fa_input = self.driver.find_element(
                 By.NAME, 'approvals_code')
             code_2fa_input.clear()
             code_2fa_input.send_keys(code_2fa)
-            submit_button = self.driver.find_element(
-                By.NAME, 'submit[Submit Code]')
+            try:
+                submit_button = self.driver.find_element(
+                    By.NAME, 'submit[Submit Code]')
+            except:
+                return LOGIN_ERROR_MESSAGE
             submit_button.click()
             if 'https://mbasic.facebook.com/login/checkpoint/' in self.driver.current_url:
                 for i in range(10):
                     if i == 9:
                         self.driver.quit()
-                        return "LỖI ĐĂNG NHẬP"
+                        return LOGIN_ERROR_MESSAGE
                     try:
                         this_was_me_button = self.driver.find_element(
                             By.NAME, 'submit[This was me]')
                         this_was_me_button.click()
                     except:
                         pass
-                    time.sleep(1)
-                    submit_button = self.driver.find_element(
-                        By.NAME, 'submit[Continue]')
+                    try:
+                        submit_button = self.driver.find_element(
+                            By.NAME, 'submit[Continue]')
+                    except:
+                        return LOGIN_ERROR_MESSAGE
                     submit_button.click()
                     if 'https://mbasic.facebook.com/login/checkpoint/' not in self.driver.current_url:
                         break
         return "ĐĂNG NHẬP THÀNH CÔNG"
 
-    def change_avatar(self, image_path):
+    def change_avatar(self, image_path: str) -> str:
         if not image_path:
             return "LỖI: KHÔNG CUNG CẤP ẢNH"
         uid = self._get_uid()
@@ -116,16 +124,29 @@ class FacebookChrome:
             post_button = self.driver.find_element(
                 By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
             post_button.click()
+            self.driver.get(f'https://mbasic.facebook.com/{uid}')
+            avatar_element = self.driver.find_element(
+                By.XPATH, '//img[contains(@src, "https://scontent.") and contains(@class, "bt") and contains(@class, "img")]')
+            avatar_element.click()
+            privacy_buton = self.driver.find_element(
+                By.XPATH, '//a[contains(@href, "/privacyx/selector")]')
+            privacy_buton.click()
+            see_more_button = self.driver.find_element(
+                By.XPATH, '//a[contains(@href, "/privacyx/selector")]'
+            )
+            see_more_button.click()
+            only_me_button = self.driver.find_element(
+                By.CSS_SELECTOR, 'a[aria-label="Only me"]')
+            only_me_button.click()
             return "ĐỔI AVATAR THÀNH CÔNG"
         except:
             return "LỖI ĐỔI AVATAR KHÔNG THÀNH CÔNG"
 
-    def post_status(self, message: str, uids: str):
+    def post_status(self, message: str, uids: List[str]) -> str:
         if not uids:
             return "LỖI: KHÔNG CUNG CẤP UID"
 
         uid = self._get_uid()
-
         if not uid:
             return "LỖI: KHÔNG TÌM THẤY UID"
 
@@ -138,18 +159,27 @@ class FacebookChrome:
         try:
             view_more = self.driver.find_element(By.NAME, 'view_overview')
             view_more.click()
+            privacy_element = self.driver.find_element(By.NAME, 'view_privacy')
+            privacy_element.click()
+            self.driver.execute_script(
+                "document.getElementById('300645083384735').click();")
+            self.driver.execute_script(
+                "document.getElementById('m_composer_set_as_default_privacy_selector').click();")
+            self.driver.execute_script(
+                "document.querySelector('input[type=\"submit\"]').click();")
             text_area = self.driver.find_element(By.NAME, 'xc_message')
             text_area.send_keys(message)
             post_button = self.driver.find_element(By.NAME, 'view_post')
             post_button.click()
             return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
-        except:
+        except Exception as e:
+            print(e)
             return "LỖI ĐĂNG TRẠNG THÁI KHÔNG THÀNH CÔNG"
 
-    def quit(self):
+    def quit(self) -> str:
         self.driver.quit()
         return "ĐÃ DỪNG LẠI"
 
 
-def random_numbers():
+def random_numbers() -> str:
     return ''.join(random.choices('0123456789', k=6))
