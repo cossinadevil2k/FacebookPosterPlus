@@ -54,7 +54,7 @@ class FacebookChrome:
         self.driver.quit()
         return None
 
-    def get_cookie(self):
+    def get_cookies(self):
         cookies = self.driver.get_cookies()
         return {cookie['name']: cookie['value'] for cookie in cookies}
 
@@ -134,3 +134,7 @@ class FacebookChrome:
         post_button = self.driver.find_element(By.NAME, 'view_post')
         post_button.click()
         return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
+
+    def quit(self):
+        self.driver.quit()
+        return "ĐÃ DỪNG LẠI"

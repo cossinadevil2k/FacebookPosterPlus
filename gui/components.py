@@ -214,8 +214,9 @@ class PostContent(QWidget):
 
 
 class ButtonPanel(QWidget):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_window = parent
         self.button_layout = QVBoxLayout()
 
         self.upload_button = QPushButton("Chọn ảnh đại diện")
@@ -226,7 +227,6 @@ class ButtonPanel(QWidget):
         self.run_button = QPushButton("Bắt đầu chạy")
         self.run_button.setToolTip("Nhấn để bắt đầu chạy")
         self.run_button.setCursor(QCursor(Qt.PointingHandCursor))
-        self.run_button.clicked.connect(self.toggle_run_state)
 
         self.image_path = None
         self.running = False
@@ -251,14 +251,22 @@ class ButtonPanel(QWidget):
                 self.upload_button.setText(f"Đã chọn: {file_name}")
                 self.image_path = file_path
 
-    def toggle_run_state(self):
-        self.running = not self.running
+    def toggle_run_state(self, is_running=None):
+        if is_running is not None:
+            self.running = is_running
+
         if self.running:
             self.run_button.setText("Dừng lại")
             self.run_button.setToolTip("Nhấn để dừng lại")
+            self.run_button.clicked.disconnect()
+            self.run_button.clicked.connect(
+                self.parent_window.stop_all_workers)
         else:
             self.run_button.setText("Bắt đầu chạy")
             self.run_button.setToolTip("Nhấn để bắt đầu chạy")
+            self.run_button.clicked.disconnect()
+            self.run_button.clicked.connect(
+                self.parent_window._run_task)
         self._update_button_style()
 
     def _update_button_style(self):
@@ -267,14 +275,11 @@ class ButtonPanel(QWidget):
         else:
             self.run_button.setStyleSheet(qss_start)
 
-    def get_upload_button(self):
-        return self.upload_button
+    def get_run_button(self):
+        return self.run_button
 
     def get_image_path(self):
         return self.image_path
-
-    def get_run_button(self):
-        return self.run_button
 
 
 class Footer(QWidget):
