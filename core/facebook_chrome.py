@@ -107,15 +107,18 @@ class FacebookChrome:
         if not uid:
             return "LỖI: KHÔNG TÌM THẤY UID"
         self.driver.get(f'https://mbasic.facebook.com/{uid}')
-        image_button = self.driver.find_element(
-            By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
-        image_button.click()
-        image_input = self.driver.find_element(By.NAME, 'file1')
-        image_input.send_keys(image_path)
-        post_button = self.driver.find_element(
-            By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
-        post_button.click()
-        return "ĐỔI AVATAR THÀNH CÔNG"
+        try:
+            image_button = self.driver.find_element(
+                By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
+            image_button.click()
+            image_input = self.driver.find_element(By.NAME, 'file1')
+            image_input.send_keys(image_path)
+            post_button = self.driver.find_element(
+                By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
+            post_button.click()
+            return "ĐỔI AVATAR THÀNH CÔNG"
+        except:
+            return "LỖI ĐỔI AVATAR KHÔNG THÀNH CÔNG"
 
     def post_status(self, message: str, uids: str):
         if not uids:
@@ -132,13 +135,16 @@ class FacebookChrome:
         message = message + "\n" + f"#{random_numbers()}"
 
         self.driver.get(f'https://mbasic.facebook.com/{uid}')
-        view_more = self.driver.find_element(By.NAME, 'view_overview')
-        view_more.click()
-        text_area = self.driver.find_element(By.NAME, 'xc_message')
-        text_area.send_keys(message)
-        post_button = self.driver.find_element(By.NAME, 'view_post')
-        post_button.click()
-        return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
+        try:
+            view_more = self.driver.find_element(By.NAME, 'view_overview')
+            view_more.click()
+            text_area = self.driver.find_element(By.NAME, 'xc_message')
+            text_area.send_keys(message)
+            post_button = self.driver.find_element(By.NAME, 'view_post')
+            post_button.click()
+            return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
+        except:
+            return "LỖI ĐĂNG TRẠNG THÁI KHÔNG THÀNH CÔNG"
 
     def quit(self):
         self.driver.quit()

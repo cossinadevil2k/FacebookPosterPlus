@@ -13,7 +13,7 @@ from .components import (AccountInput, ButtonPanel, Footer, Header,
                          PostContent, ProxyInput, UIDInput)
 from .resources import base64_icon, qss
 
-BATCH_UID = 2
+BATCH_UID = 50
 
 
 class WorkerThread(QThread):
