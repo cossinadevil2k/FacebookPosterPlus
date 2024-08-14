@@ -12,6 +12,7 @@ from .components import (AccountInput, ButtonPanel, Footer, Header,
                          PostContent, ProxyInput, UIDInput)
 from .resources import base64_icon, qss
 
+BATCH_UID = 2
 
 class WorkerThread(QThread):
     update_status = pyqtSignal(int, str, str)
@@ -32,7 +33,7 @@ class WorkerThread(QThread):
 
     def run(self):
         self.facebook_instance = FacebookChrome(
-            username=self.account_details[0], password=self.account_details[1], proxy=self.proxy)
+            username=self.account_details[0], password=self.account_details[1], key_2fa=self.account_details[2], proxy=self.proxy)
         login_status = self.facebook_instance.login()
         if self._stop_requested:
             self.finished.emit("ĐÃ DỪNG LẠI")
@@ -42,8 +43,8 @@ class WorkerThread(QThread):
         if "LỖI" in login_status:
             self.finished.emit("ĐĂNG NHẬP THẤT BẠI")
             return
-        cookies = self.facebook_instance.get_cookies()
-        self.update_cookies.emit(self.index, cookies)
+        # cookies = self.facebook_instance.get_cookies()
+        # self.update_cookies.emit(self.index, cookies)
 
         if login_status == "ĐĂNG NHẬP THÀNH CÔNG" and self.avatar_file_path:
             avatar_status = self.facebook_instance.change_avatar(
@@ -182,8 +183,13 @@ class MainWindow(QMainWindow):
         self.completed_workers = 0
 
         for index, account in enumerate(account_list):
+            uids = user_ids[(index*BATCH_UID) : (index*BATCH_UID) + BATCH_UID]
+
+            if not uids:
+                uids = user_ids[:BATCH_UID]
+
             worker = WorkerThread(index, account, proxy,
-                                  post_content, user_ids, avatar_file_path)
+                                  post_content, uids, avatar_file_path)
             worker.update_status.connect(update_status)
             worker.update_uid_status.connect(update_uid_status)
             worker.update_cookies.connect(update_cookies)

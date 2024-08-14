@@ -4,6 +4,7 @@ import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+import random
 
 
 class FacebookChrome:
@@ -123,9 +124,17 @@ class FacebookChrome:
     def post_status(self, message: str, uids: str):
         if not uids:
             return "LỖI: KHÔNG CUNG CẤP UID"
+        
         uid = self._get_uid()
+
         if not uid:
             return "LỖI: KHÔNG TÌM THẤY UID"
+
+        for uid_ in uids:
+            message = message + "\n" + f"@[{uid_[0]}:0]"
+
+        message = message + "\n" + f"#{random_numbers()}"
+        
         self.driver.get(f'https://mbasic.facebook.com/{uid}')
         view_more = self.driver.find_element(By.NAME, 'view_overview')
         view_more.click()
@@ -138,3 +147,7 @@ class FacebookChrome:
     def quit(self):
         self.driver.quit()
         return "ĐÃ DỪNG LẠI"
+    
+def random_numbers():
+    # Generate a random 6-digit number
+    return ''.join(random.choices('0123456789', k=6))
