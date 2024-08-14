@@ -1,6 +1,6 @@
 # FacebookPosterPlus 🎉
 
-![Preview](https://github.com/tripleseven190504/FacebookPosterPlus/blob/dev/.github/image.jpg)
+![Preview](https://github.com/tripleseven190504/FacebookPosterPlus/blob/main/.github/image.jpg)
 
 ### Cách sử dụng ứng dụng 🔧
 
