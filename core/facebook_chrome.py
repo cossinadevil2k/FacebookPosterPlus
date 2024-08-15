@@ -1,12 +1,12 @@
 import random
-import re
-import time
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 class FacebookChrome:
@@ -171,6 +171,49 @@ class FacebookChrome:
             text_area.send_keys(message)
             post_button = self.driver.find_element(By.NAME, 'view_post')
             post_button.click()
+            links = self.driver.find_elements(
+                By.CSS_SELECTOR, 'a[href*="/story.php"]')
+            if links:
+                latest_link = links[0]
+                latest_url = latest_link.get_attribute('href')
+
+                def get_param_from_url(url, param):
+                    from urllib.parse import parse_qs, urlparse
+                    parsed_url = urlparse(url)
+                    params = parse_qs(parsed_url.query)
+                    return params.get(param, [None])[0]
+
+                story_fbid = get_param_from_url(latest_url, 'story_fbid')
+                post_id = get_param_from_url(latest_url, 'id')
+                if story_fbid and post_id:
+                    new_url = f"https://en-gb.facebook.com/permalink.php?story_fbid={story_fbid}&id={post_id}"
+                    self.driver.get(new_url)
+                    edit_button = self.driver.find_element(
+                        By.XPATH, '//div[@aria-label="Actions for this post"]')
+                    edit_button.click()
+                    edit_post_button = WebDriverWait(self.driver, 5).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, '//span[text()="Edit post"]/parent::div/parent::div'))
+                    )
+                    edit_post_button.click()
+                    remove_link_preview_button = WebDriverWait(self.driver, 5).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, '//div[@aria-label="Remove link preview from your post"]'))
+                    )
+                    remove_link_preview_button.click()
+                    WebDriverWait(self.driver, 2).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH,
+                             '//div[@aria-label="Remove link preview from your post"]')
+                        )
+                    )
+
+                    remove_link_preview_button.click()
+                    save_button = WebDriverWait(self.driver, 5).until(
+                        EC.element_to_be_clickable(
+                            (By.XPATH, '//div[@aria-label="Save"]'))
+                    )
+                    save_button.click()
             return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
         except Exception as e:
             print(e)
