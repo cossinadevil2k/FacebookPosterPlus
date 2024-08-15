@@ -63,15 +63,18 @@ class FacebookChrome:
 
     def login(self) -> str:
         LOGIN_ERROR_MESSAGE = "LỖI ĐĂNG NHẬP"
-        self.driver.get('https://mbasic.facebook.com')
-        username_input = self.driver.find_element(By.ID, 'm_login_email')
-        username_input.clear()
-        username_input.send_keys(self.username)
-        password_input = self.driver.find_element(By.NAME, 'pass')
-        password_input.clear()
-        password_input.send_keys(self.password)
-        login_button = self.driver.find_element(By.NAME, 'login')
-        login_button.click()
+        try:
+            self.driver.get('https://mbasic.facebook.com')
+            username_input = self.driver.find_element(By.ID, 'm_login_email')
+            username_input.clear()
+            username_input.send_keys(self.username)
+            password_input = self.driver.find_element(By.NAME, 'pass')
+            password_input.clear()
+            password_input.send_keys(self.password)
+            login_button = self.driver.find_element(By.NAME, 'login')
+            login_button.click()
+        except:
+            return LOGIN_ERROR_MESSAGE
         if 'https://mbasic.facebook.com/login/' in self.driver.current_url:
             self.driver.quit()
             return LOGIN_ERROR_MESSAGE
