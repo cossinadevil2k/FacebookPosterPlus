@@ -5,9 +5,9 @@ import time
 
 from PyQt5.QtCore import QBuffer, QIODevice, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QImage, QPixmap
-from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QMainWindow,
+from PyQt5.QtWidgets import (QApplication, QCheckBox, QHBoxLayout, QMainWindow,
                              QMessageBox, QTableWidgetItem, QVBoxLayout,
-                             QWidget, QCheckBox)
+                             QWidget)
 
 from core import FacebookChrome
 
@@ -41,13 +41,13 @@ class WorkerThread(QThread):
         try:
             self.update_status.emit(self.index, 'ĐANG ĐĂNG NHẬP')
             self.facebook_instance = FacebookChrome(
-                username=self.account_details[0], 
-                password=self.account_details[1], 
-                key_2fa=self.account_details[2], 
+                username=self.account_details[0],
+                password=self.account_details[1],
+                key_2fa=self.account_details[2],
                 cookies=self.account_details[3],
                 proxy=self.proxy
             )
-            
+
             login_status = self.facebook_instance.login(self.login_with_proxy)
             if self._stop_requested:
                 self.finished.emit("ĐÃ DỪNG LẠI")
@@ -140,10 +140,8 @@ class MainWindow(QMainWindow):
         self.button_panel.get_run_button().clicked.connect(self._run_task)
 
     def _set_window_size(self):
-        screen = QApplication.primaryScreen()
-        screen_geometry = screen.availableGeometry()
-        width = screen_geometry.width() * 3 / 4
-        height = screen_geometry.height() * 3 / 4
+        width = 1000
+        height = 600
         self.resize(int(width), int(height))
         self.setFixedSize(int(width), int(height))
         self.setMinimumSize(int(width), int(height))
@@ -220,9 +218,6 @@ class MainWindow(QMainWindow):
                 worker.finished.connect(worker_finished)
                 self.workers.append(worker)
                 worker.start()
-            
-            worker.wait()
-            time.sleep(5)
 
     def stop_all_workers(self):
         for worker in self.workers:
