@@ -7,7 +7,7 @@ from PyQt5.QtCore import QBuffer, QIODevice, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIcon, QImage, QPixmap
 from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QMainWindow,
                              QMessageBox, QTableWidgetItem, QVBoxLayout,
-                             QWidget)
+                             QWidget, QCheckBox)
 
 from core import FacebookChrome
 
@@ -25,7 +25,7 @@ class WorkerThread(QThread):
     update_cookies = pyqtSignal(int, str)
     finished = pyqtSignal(str)
 
-    def __init__(self, index, account_details, proxy, post_content, user_ids, avatar_file_path):
+    def __init__(self, index, account_details, proxy, post_content, user_ids, avatar_file_path, login_with_proxy):
         super().__init__()
         self.index = index
         self.account_details = account_details
@@ -35,14 +35,20 @@ class WorkerThread(QThread):
         self.avatar_file_path = avatar_file_path
         self.facebook_instance = None
         self._stop_requested = False
+        self.login_with_proxy = login_with_proxy
 
     def run(self):
         try:
             self.update_status.emit(self.index, 'ĐANG ĐĂNG NHẬP')
             self.facebook_instance = FacebookChrome(
-                username=self.account_details[0], password=self.account_details[1], key_2fa=self.account_details[2], proxy=self.proxy)
-
-            login_status = self.facebook_instance.login()
+                username=self.account_details[0], 
+                password=self.account_details[1], 
+                key_2fa=self.account_details[2], 
+                cookies=self.account_details[3],
+                proxy=self.proxy
+            )
+            
+            login_status = self.facebook_instance.login(self.login_with_proxy)
             if self._stop_requested:
                 self.finished.emit("ĐÃ DỪNG LẠI")
                 return
@@ -111,10 +117,12 @@ class MainWindow(QMainWindow):
         self.proxy_input = ProxyInput()
         self.post_content = PostContent()
         self.button_panel = ButtonPanel(self)
+        self.login_with_proxy = QCheckBox("Đăng nhập bằng Proxy")
 
         right_section_layout.addWidget(self.proxy_input)
         right_section_layout.addWidget(self.post_content)
         right_section_layout.addWidget(self.button_panel)
+        right_section_layout.addWidget(self.login_with_proxy)
 
         hero_section_layout.addLayout(left_section_layout, 3)
         hero_section_layout.addLayout(right_section_layout, 1)
@@ -205,7 +213,7 @@ class MainWindow(QMainWindow):
                     uids = user_ids[:BATCH_UID]
 
                 worker = WorkerThread(
-                    index, account, proxy, post_content, uids, avatar_file_path)
+                    index, account, proxy, post_content, uids, avatar_file_path, self.login_with_proxy.isChecked())
                 worker.update_status.connect(update_status)
                 worker.update_uid_status.connect(update_uid_status)
                 worker.update_cookies.connect(update_cookies)
