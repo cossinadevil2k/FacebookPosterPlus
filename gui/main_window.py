@@ -212,6 +212,9 @@ class MainWindow(QMainWindow):
                 worker.finished.connect(worker_finished)
                 self.workers.append(worker)
                 worker.start()
+            
+            worker.wait()
+            time.sleep(5)
 
     def stop_all_workers(self):
         for worker in self.workers:
