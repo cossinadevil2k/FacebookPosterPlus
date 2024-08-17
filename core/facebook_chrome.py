@@ -40,7 +40,6 @@ class FacebookChrome:
             self.options.add_argument(f"--proxy-server={proxy}")
 
         self.driver = webdriver.Chrome(options=self.options)
-        self.driver.set_window_position()
         self.driver.get(self.base_url)
         cookie = {'name': 'locale', 'value': 'en_GB'}
         self.driver.add_cookie(cookie)
