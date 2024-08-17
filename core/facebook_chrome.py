@@ -1,6 +1,9 @@
+import os
 import random
+import signal
 from typing import Dict, List, Optional
 
+import psutil
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -12,6 +15,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 class FacebookChrome:
     def __init__(self, username: str, password: str, cookies: str, key_2fa: Optional[str] = None, proxy: Optional[str] = None):
         self.options = Options()
+        self.base_url = 'https://mbasic.facebook.com'
         # self.options.add_argument('--headless')
         self.options.add_argument("--disable-extensions")
         self.options.add_argument("--disable-gpu")
@@ -36,14 +40,25 @@ class FacebookChrome:
             self.options.add_argument(f"--proxy-server={proxy}")
 
         self.driver = webdriver.Chrome(options=self.options)
-        self.driver.get('https://mbasic.facebook.com')
+        self.driver.set_window_position()
+        self.driver.get(self.base_url)
         cookie = {'name': 'locale', 'value': 'en_GB'}
         self.driver.add_cookie(cookie)
         self.username = username
         self.password = password
         self.key_2fa = key_2fa
         self.cookies = cookies
+        self.pid = self._get_pid()
 
+    def _get_pid(self):
+        try:
+            for proc in psutil.process_iter(['pid', 'name']):
+                if proc.info['name'] == 'chrome.exe':
+                    if 'webdriver' in proc.cmdline():
+                        return proc.info['pid']
+        except Exception as e:
+            print(f"Error getting PID: {e}")
+        return None
     def _get_code_2fa(self, key_2fa: str) -> Optional[str]:
         url = f"https://2fa.live/tok/{key_2fa}"
         response = requests.get(url)
@@ -62,17 +77,15 @@ class FacebookChrome:
         cookies = self.driver.get_cookies()
         return {cookie['name']: cookie['value'] for cookie in cookies}
 
-    def login(self, login_with_proxy: bool = False) -> str:
+    def login(self, login_with_cookie: bool = False) -> str:
         LOGIN_ERROR_MESSAGE = "LỖI ĐĂNG NHẬP"
-        if login_with_proxy:
+        if login_with_cookie:
             try:
                 cookies = self.cookies.split(";")
                 for cookie in cookies:
                     name, value = cookie.split("=")
                     self.driver.add_cookie({'name': name.strip(), 'value': value.strip()})
-                
-                self.driver.get('https://mbasic.facebook.com')
-
+                self.driver.get(self.base_url)
                 feed_compose = WebDriverWait(self.driver, 5).until(
                     EC.element_to_be_clickable(
                         (By.ID, 'mbasic_inline_feed_composer'))
@@ -85,7 +98,7 @@ class FacebookChrome:
                 return "LỖI ĐĂNG NHẬP COOKIE. CHECK COOKIE LẠI"
         else:
             try:
-                self.driver.get('https://mbasic.facebook.com')
+                self.driver.get(self.base_url)
                 username_input = self.driver.find_element(By.ID, 'm_login_email')
                 username_input.clear()
                 username_input.send_keys(self.username)
@@ -94,42 +107,42 @@ class FacebookChrome:
                 password_input.send_keys(self.password)
                 login_button = self.driver.find_element(By.NAME, 'login')
                 login_button.click()
+                if f'{self.base_url}/login/' in self.driver.current_url:
+                    self.driver.quit()
+                    return LOGIN_ERROR_MESSAGE
+                if f'{self.base_url}/checkpoint/?_rdr' in self.driver.current_url:
+                    code_2fa = self._get_code_2fa(self.key_2fa or '')
+                    code_2fa_input = self.driver.find_element(
+                        By.NAME, 'approvals_code')
+                    code_2fa_input.clear()
+                    code_2fa_input.send_keys(code_2fa)
+                    try:
+                        submit_button = self.driver.find_element(
+                            By.NAME, 'submit[Submit Code]')
+                    except:
+                        return LOGIN_ERROR_MESSAGE
+                    submit_button.click()
+                    if f'{self.base_url}/login/checkpoint/' in self.driver.current_url:
+                        for i in range(10):
+                            if i == 9:
+                                self.driver.quit()
+                                return LOGIN_ERROR_MESSAGE
+                            try:
+                                this_was_me_button = self.driver.find_element(
+                                    By.NAME, 'submit[This was me]')
+                                this_was_me_button.click()
+                            except:
+                                pass
+                            try:
+                                submit_button = self.driver.find_element(
+                                    By.NAME, 'submit[Continue]')
+                            except:
+                                return LOGIN_ERROR_MESSAGE
+                            submit_button.click()
+                            if f'{self.base_url}/login/checkpoint/' not in self.driver.current_url:
+                                break
             except:
                 return LOGIN_ERROR_MESSAGE
-            if 'https://mbasic.facebook.com/login/' in self.driver.current_url:
-                self.driver.quit()
-                return LOGIN_ERROR_MESSAGE
-            if 'https://mbasic.facebook.com/checkpoint/?_rdr' in self.driver.current_url:
-                code_2fa = self._get_code_2fa(self.key_2fa or '')
-                code_2fa_input = self.driver.find_element(
-                    By.NAME, 'approvals_code')
-                code_2fa_input.clear()
-                code_2fa_input.send_keys(code_2fa)
-                try:
-                    submit_button = self.driver.find_element(
-                        By.NAME, 'submit[Submit Code]')
-                except:
-                    return LOGIN_ERROR_MESSAGE
-                submit_button.click()
-                if 'https://mbasic.facebook.com/login/checkpoint/' in self.driver.current_url:
-                    for i in range(10):
-                        if i == 9:
-                            self.driver.quit()
-                            return LOGIN_ERROR_MESSAGE
-                        try:
-                            this_was_me_button = self.driver.find_element(
-                                By.NAME, 'submit[This was me]')
-                            this_was_me_button.click()
-                        except:
-                            pass
-                        try:
-                            submit_button = self.driver.find_element(
-                                By.NAME, 'submit[Continue]')
-                        except:
-                            return LOGIN_ERROR_MESSAGE
-                        submit_button.click()
-                        if 'https://mbasic.facebook.com/login/checkpoint/' not in self.driver.current_url:
-                            break
             return "ĐĂNG NHẬP THÀNH CÔNG"
 
     def change_avatar(self, image_path: str) -> str:
@@ -138,7 +151,7 @@ class FacebookChrome:
         uid = self._get_uid()
         if not uid:
             return "LỖI: KHÔNG TÌM THẤY UID"
-        self.driver.get(f'https://mbasic.facebook.com/{uid}')
+        self.driver.get(f'{self.base_url}/{uid}')
         try:
             image_button = self.driver.find_element(
                 By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
@@ -148,7 +161,7 @@ class FacebookChrome:
             post_button = self.driver.find_element(
                 By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
             post_button.click()
-            self.driver.get(f'https://mbasic.facebook.com/{uid}')
+            self.driver.get(f'{self.base_url}/{uid}')
             avatar_element = self.driver.find_element(
                 By.XPATH, '//img[contains(@src, "https://scontent.") and contains(@class, "bt") and contains(@class, "img")]')
             avatar_element.click()
@@ -179,7 +192,7 @@ class FacebookChrome:
 
         message = message + "\n" + f"#{random_numbers()}"
 
-        self.driver.get(f'https://mbasic.facebook.com/{uid}')
+        self.driver.get(f'{self.base_url}/{uid}')
         try:
             view_more = self.driver.find_element(By.NAME, 'view_overview')
             view_more.click()
@@ -242,13 +255,18 @@ class FacebookChrome:
             except:
                 print("Không có link để tắt preview.")
                 return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
-            
+
             return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
-        except Exception as e:
-            print(e)
+        except:
+            # print(e)
             return "LỖI ĐĂNG TRẠNG THÁI KHÔNG THÀNH CÔNG"
 
     def quit(self) -> str:
+        if self.pid:
+            try:
+                os.kill(self.pid, signal.SIGTERM)
+            except Exception as e:
+                print(f"Error killing process: {e}")
         self.driver.quit()
         return "ĐÃ DỪNG LẠI"
 

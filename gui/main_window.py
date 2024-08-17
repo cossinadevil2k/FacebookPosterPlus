@@ -1,6 +1,5 @@
 import base64
 import json
-import math
 import time
 
 from PyQt5.QtCore import QBuffer, QIODevice, Qt, QThread, pyqtSignal
@@ -16,12 +15,11 @@ from .components import (AccountInput, ButtonPanel, Footer, Header,
 from .resources import base64_icon, qss
 
 BATCH_UID = 50
-RUN_BATCH = 5
+RUN_BATCH = 3
 
 
 class WorkerThread(QThread):
     update_status = pyqtSignal(int, str)
-    update_uid_status = pyqtSignal(str)
     update_cookies = pyqtSignal(int, str)
     finished = pyqtSignal(str)
 
@@ -62,14 +60,11 @@ class WorkerThread(QThread):
             self.update_cookies.emit(self.index, cookies_str)
 
             if login_status == "ĐĂNG NHẬP THÀNH CÔNG" and self.avatar_file_path:
-                avatar_status = self.facebook_instance.change_avatar(
-                    self.avatar_file_path)
+                avatar_status = self.facebook_instance.change_avatar(self.avatar_file_path)
                 self.update_status.emit(self.index, avatar_status)
 
             if login_status == "ĐĂNG NHẬP THÀNH CÔNG":
-                post_status = self.facebook_instance.post_status(
-                    self.post_content, self.user_ids)
-                self.update_uid_status.emit('THÀNH CÔNG')
+                post_status = self.facebook_instance.post_status(self.post_content, self.user_ids)
                 self.update_status.emit(self.index, post_status)
 
             self.finished.emit("HOÀN TẤT")
@@ -80,11 +75,12 @@ class WorkerThread(QThread):
                 self.facebook_instance = None
 
     def stop(self):
-        self._stop_requested = True
-        if self.facebook_instance:
-            status = self.facebook_instance.quit()
-            self.finished.emit(status)
-            self.facebook_instance = None
+            self._stop_requested = True
+            if self.facebook_instance:
+                self.facebook_instance.quit()
+                self.facebook_instance = None
+            self.quit()
+            self.wait()
 
 
 class MainWindow(QMainWindow):
@@ -94,6 +90,7 @@ class MainWindow(QMainWindow):
         self.workers = []
         self.worker_count = 0
         self.completed_workers = 0
+        self.activate_worker = 0
 
     def _initUI(self):
         central_widget = QWidget()
@@ -117,12 +114,12 @@ class MainWindow(QMainWindow):
         self.proxy_input = ProxyInput()
         self.post_content = PostContent()
         self.button_panel = ButtonPanel(self)
-        self.login_with_proxy = QCheckBox("Đăng nhập bằng Proxy")
+        self.login_with_cookie = QCheckBox("Đăng nhập bằng Cookie")
 
         right_section_layout.addWidget(self.proxy_input)
         right_section_layout.addWidget(self.post_content)
         right_section_layout.addWidget(self.button_panel)
-        right_section_layout.addWidget(self.login_with_proxy)
+        right_section_layout.addWidget(self.login_with_cookie)
 
         hero_section_layout.addLayout(left_section_layout, 3)
         hero_section_layout.addLayout(right_section_layout, 1)
@@ -142,43 +139,41 @@ class MainWindow(QMainWindow):
     def _set_window_size(self):
         width = 1000
         height = 600
-        self.resize(int(width), int(height))
-        self.setFixedSize(int(width), int(height))
-        self.setMinimumSize(int(width), int(height))
+        self.resize(width, height)
+        self.setFixedSize(width, height)
+        self.setMinimumSize(width, height)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowMaximizeButtonHint)
-
     def base64_to_pixmap(self, base64_str):
         image_data = base64.b64decode(base64_str)
         buffer = QBuffer()
         buffer.setData(image_data)
-        buffer.open(QIODevice.ReadOnly)  # type: ignore
+        buffer.open(QIODevice.ReadOnly)
         image = QImage()
         image.loadFromData(buffer.data())
         pixmap = QPixmap.fromImage(image)
         return pixmap
 
     def _run_task(self):
+        self.account_list = self.account_input.get_table_data()
+        self.obj_account_list = [{"id": idx, "account": account} for idx, account in enumerate(self.account_list)]
+        self.worker_count = len(self.account_list)
         proxy = self.proxy_input.get_text()
-        user_ids = self.uid_input.get_table_data()
-        account_list = self.account_input.get_table_data()
+        uid_list = self.uid_input.get_table_data()
         avatar_file_path = self.button_panel.get_image_path()
         post_content = self.post_content.get_content()
         self.button_panel.toggle_run_state(True)
+
         if not post_content:
             self.button_panel.toggle_run_state(False)
             QMessageBox.critical(self, "Lỗi", "Chưa điền nội dung bài đăng!")
             return
-        if not user_ids:
+        if not uid_list:
             self.button_panel.toggle_run_state(False)
             QMessageBox.critical(self, "Lỗi", "Chưa cung cấp UID!")
             return
 
         def update_status(index, status):
             self.account_input.set_status(index, status)
-            QApplication.processEvents()
-
-        def update_uid_status(status):
-            self.uid_input.set_status(status)
             QApplication.processEvents()
 
         def update_cookies(index, cookies):
@@ -189,38 +184,39 @@ class MainWindow(QMainWindow):
 
         def worker_finished(status):
             self.completed_workers += 1
+            self.activate_worker -= 1
+            if self.activate_worker == 2:
+                time.sleep(15)
             if self.completed_workers == self.worker_count:
                 self.button_panel.toggle_run_state(False)
-                QMessageBox.information(
-                    self, "Hoàn tất", f"Chạy hoàn tất! Trạng thái: {status}")
+                QMessageBox.information(self, "Hoàn tất", f"Chạy hoàn tất! Trạng thái: {status}")
 
         self.workers = []
-        self.worker_count = len(account_list)
         self.completed_workers = 0
+        self.activate_worker = 0
 
-        batch_size = math.ceil(len(account_list) / RUN_BATCH)
-
-        for batch in range(batch_size):
-            batch_account = account_list[(
-                batch*RUN_BATCH): (batch*RUN_BATCH) + RUN_BATCH]
-            for idx, account in enumerate(batch_account):
-                index = (batch * RUN_BATCH) + idx
-                uids = user_ids[(index*BATCH_UID): (index*BATCH_UID) + BATCH_UID]
-
-                if not uids:
-                    uids = user_ids[:BATCH_UID]
-
+        while len(self.obj_account_list) > 0:
+            while self.activate_worker < RUN_BATCH and len(self.obj_account_list) > 0:
+                obj_account = self.obj_account_list.pop(0)
+                idx = obj_account["id"]
+                account = obj_account["account"]
+                if not uid_list:
+                    uid_list = uid_list[:BATCH_UID]
                 worker = WorkerThread(
-                    index, account, proxy, post_content, uids, avatar_file_path, self.login_with_proxy.isChecked())
+                    idx, account, proxy, post_content, uid_list, avatar_file_path, self.login_with_cookie.isChecked())
                 worker.update_status.connect(update_status)
-                worker.update_uid_status.connect(update_uid_status)
                 worker.update_cookies.connect(update_cookies)
                 worker.finished.connect(worker_finished)
                 self.workers.append(worker)
+                self.activate_worker += 1
                 worker.start()
+            QApplication.processEvents()
 
     def stop_all_workers(self):
+        self.obj_account_list = []
         for worker in self.workers:
             worker.stop()
+        for worker in self.workers:
             worker.wait()
         self.button_panel.toggle_run_state(False)
+        self.workers = []

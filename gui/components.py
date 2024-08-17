@@ -30,7 +30,7 @@ class Header(QWidget):
         self.setLayout(layout)
 
     def open_copyright(self, event):
-        webbrowser.open("https://t.me/tripleseven190504")
+        webbrowser.open("https://t.me/ovftank")
 
 
 class ProxyInput(QWidget):
@@ -56,8 +56,8 @@ class UIDInput(QWidget):
         self.label = QLabel("Danh sách UID cần gắn thẻ:")
 
         self.table = QTableWidget()
-        self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(["UID", "Trạng thái"])
+        self.table.setColumnCount(1)
+        self.table.setHorizontalHeaderLabels(["UID"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setToolTip("Nhấn chuột phải để dán danh sách UID")
@@ -88,25 +88,13 @@ class UIDInput(QWidget):
         row_position = self.table.rowCount()
         self.table.insertRow(row_position)
         self.table.setItem(row_position, 0, QTableWidgetItem(uid))
-        self.table.setItem(row_position, 1, QTableWidgetItem(""))
 
     def get_table_data(self):
         data = []
         for row in range(self.table.rowCount()):
             uid_item = self.table.item(row, 0)
-            status_item = self.table.item(row, 1)
-            data.append([uid_item.text() if uid_item is not None else "",
-                         status_item.text() if status_item is not None else ""])
+            data.append([uid_item.text() if uid_item is not None else ""])
         return data
-
-    def set_status(self, status_texts):
-        def update_row(row):
-            if row < len(status_texts):
-                status_item = self.table.item(row, 1)
-                if status_item:
-                    status_item.setText(status_texts[row])
-                QTimer.singleShot(500, lambda: update_row(row + 1))
-        update_row(0)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Delete:
