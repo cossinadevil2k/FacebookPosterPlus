@@ -7,7 +7,6 @@ def create_executable():
         'pyinstaller',
         '--noconfirm',
         '--onefile',
-        '--windowed',
         '--icon', icon,
         '--add-data', f'{icon};.',
         'main.py'
