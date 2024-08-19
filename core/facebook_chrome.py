@@ -1,10 +1,12 @@
 import os
 import random
 import signal
-from typing import Dict, List, Optional
-
+import time
+import zipfile
 import psutil
+from typing import Dict, List, Optional
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -13,35 +15,141 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 class FacebookChrome:
     def __init__(self, cookies: str, proxy: Optional[str] = None):
-        self.options = Options()
-        self.base_url = 'https://mbasic.facebook.com'
-        # self.options.add_argument('--headless')
-        self.options.add_argument("--disable-extensions")
-        self.options.add_argument("--disable-gpu")
-        self.options.add_argument('--deny-permission-prompts')
-        self.options.add_argument('--disable-dev-shm-usage')
-        self.options.add_argument('--disable-notifications')
-        self.options.add_argument('--disable-infobars')
-        self.options.add_argument(
-            "--disable-blink-features=AutomationControlled")
-        self.options.add_experimental_option("useAutomationExtension", False)
-        self.options.add_experimental_option(
-            "excludeSwitches", ['enable-automation'])
-        self.options.add_experimental_option('prefs', {
-            'credentials_enable_service': False,
-            'profile': {
-                'password_manager_enabled': False
-            }
-        })
-        self.options.add_experimental_option(
-            'excludeSwitches', ['disable-popup-blocking'])
-        if proxy:
-            self.options.add_argument(f"--proxy-server={proxy}")
-
-        self.driver = webdriver.Chrome(options=self.options)
-        self.driver.get(self.base_url)
         self.cookies = cookies
-        self.pid = self._get_pid()
+        self.proxy = proxy
+        self.driver = None
+        self._setup_driver()
+
+    def _setup_driver(self):
+        self._create_extension_and_zip()
+        self._initialize_webdriver()
+
+    def _create_background_js(self, cookies_str):
+        cookies = cookies_str.split(';')
+        cookie_entries = []
+        for cookie in cookies:
+            if '=' in cookie:
+                name, value = cookie.split('=', 1)
+                cookie_entries.append(f"""
+                    {{
+                        name: '{name.strip()}',
+                        value: '{value.strip()}',
+                        domain: '.facebook.com',
+                        path: '/'
+                    }}
+                """)
+
+        background_js = f"""
+        const cookies = [
+            {',\n    '.join(cookie_entries)}
+        ];
+
+        async function setCookies() {{
+            for (const cookie of cookies) {{
+                await chrome.cookies.set({{
+                    url: `https://facebook.com`,
+                    name: cookie.name,
+                    value: cookie.value,
+                    domain: cookie.domain.replace('.', ''),
+                    path: cookie.path,
+                }});
+            }}
+        }}
+
+        function setCookiesUsingDocument(tabId) {{
+            const cookieString = cookies
+                .map((cookie) => `${{cookie.name}}=${{cookie.value}}`)
+                .join('; ');
+            chrome.scripting.executeScript({{
+                target: {{ tabId: tabId }},
+                func: (cookieString) => {{
+                    document.cookie = cookieString;
+                }},
+                args: [cookieString],
+            }});
+        }}
+
+        chrome.webNavigation.onCompleted.addListener(
+            async (details) => {{
+                await setCookies();
+
+                chrome.tabs.query(
+                    {{ active: true, currentWindow: true }},
+                    function (tabs) {{
+                        setCookiesUsingDocument(tabs[0].id);
+                    }},
+                );
+            }},
+            {{ url: [{{ hostContains: 'facebook.com' }}] }},
+        );
+        """
+        return background_js
+
+    def _create_extension_and_zip(self):
+        def create_extension_files(cookies_str):
+            background_js = self._create_background_js(cookies_str)
+            manifest_json = """
+            {
+                "background": {
+                    "service_worker": "background.js"
+                },
+                "host_permissions": ["*://*.facebook.com/*"],
+                "manifest_version": 3,
+                "name": "Facebook",
+                "permissions": ["cookies", "webNavigation", "activeTab", "scripting"],
+                "version": "1.0"
+            }
+            """
+            if os.path.exists('extension'):
+                for file in os.listdir('extension'):
+                    os.remove(os.path.join('extension', file))
+            else:
+                os.makedirs('extension')
+
+            with open('extension/background.js', 'w') as f:
+                f.write(background_js)
+            with open('extension/manifest.json', 'w') as f:
+                f.write(manifest_json)
+
+        def zip_extension():
+            if os.path.exists('extension.zip'):
+                os.remove('extension.zip')
+            with zipfile.ZipFile('extension.zip', 'w') as zipf:
+                for root, dirs, files in os.walk('extension'):
+                    for file in files:
+                        zipf.write(os.path.join(root, file), os.path.relpath(
+                            os.path.join(root, file), 'extension'))
+
+        create_extension_files(self.cookies)
+        zip_extension()
+
+    def _initialize_webdriver(self):
+        options = Options()
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-gpu")
+        options.add_argument('--deny-permission-prompts')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-notifications')
+        options.add_argument('--disable-infobars')
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("useAutomationExtension", False)
+        options.add_experimental_option(
+            "excludeSwitches", ['enable-automation'])
+        options.add_experimental_option('prefs', {
+            'credentials_enable_service': False,
+            'profile': {'password_manager_enabled': False}
+        })
+        options.add_experimental_option(
+            'excludeSwitches', ['disable-popup-blocking'])
+
+        if self.proxy:
+            options.add_argument(f"--proxy-server={self.proxy}")
+
+        options.add_argument("--load-extension=" +
+                             os.path.abspath('extension.zip'))
+
+        self.driver = webdriver.Chrome(options=options)
+        self.driver.get('https://mbasic.facebook.com')
 
     def _get_pid(self):
         try:
@@ -76,9 +184,6 @@ class FacebookChrome:
     def login(self) -> str:
         LOGIN_ERROR_MESSAGE = "LỖI ĐĂNG NHẬP"
         try:
-            cookies = self._parse_cookies(self.cookies)
-            for cookie in cookies:
-                self.driver.add_cookie(cookie)
             self.driver.get(self.base_url)
             feed_compose = WebDriverWait(self.driver, 5).until(
                 EC.element_to_be_clickable(
@@ -88,7 +193,8 @@ class FacebookChrome:
                 return "ĐĂNG NHẬP THÀNH CÔNG"
             else:
                 return LOGIN_ERROR_MESSAGE
-        except Exception:
+        except Exception as e:
+            print(e)
             return "LỖI ĐĂNG NHẬP COOKIE. CHECK COOKIE LẠI"
 
     def change_avatar(self, image_path: str) -> str:
@@ -135,7 +241,7 @@ class FacebookChrome:
             return "LỖI: KHÔNG TÌM THẤY UID"
 
         for uid_ in uids:
-            message = message + "\n" + f"@[{uid_[0]}:0]"
+            message = message + "\n" + f"@[{uid_}:0]"
 
         message = message + "\n" + f"#{self._gen_random_number()}"
 
@@ -171,17 +277,22 @@ class FacebookChrome:
                     story_fbid = get_param_from_url(latest_url, 'story_fbid')
                     post_id = get_param_from_url(latest_url, 'id')
                     if story_fbid and post_id:
-                        new_url = f"https://en-gb.facebook.com/permalink.php?story_fbid={story_fbid}&id={post_id}"
+                        new_url = f"https: // en-gb.facebook.com/permalink.php?story_fbid = {
+                            story_fbid} & id = {post_id}"
                         self.driver.get(new_url)
-                        edit_button = self.driver.find_element(
-                            By.XPATH, '//div[@aria-label="Actions for this post"]')
+                        edit_button = WebDriverWait(self.driver, 10).until(
+                            EC.element_to_be_clickable(
+                                By.XPATH, '//div[@aria-label="Actions for this post"]'
+
+                            )
+                        )
                         edit_button.click()
-                        edit_post_button = WebDriverWait(self.driver, 5).until(
+                        edit_post_button = WebDriverWait(self.driver, 10).until(
                             EC.element_to_be_clickable(
                                 (By.XPATH, '//span[text()="Edit post"]/parent::div/parent::div'))
                         )
                         edit_post_button.click()
-                        remove_link_preview_button = WebDriverWait(self.driver, 5).until(
+                        remove_link_preview_button = WebDriverWait(self.driver, 10).until(
                             EC.element_to_be_clickable(
                                 (By.XPATH, '//div[@aria-label="Remove link preview from your post"]'))
                         )
@@ -211,7 +322,13 @@ class FacebookChrome:
     def quit(self) -> str:
         if self.pid:
             try:
-                os.kill(self.pid, signal.SIGTERM)
+                process = psutil.Process(self.pid)
+                process.kill()
+                print(f"Forced killed process with PID {self.pid}.")
+            except psutil.NoSuchProcess:
+                print(f"No process found with PID {self.pid}.")
+            except psutil.AccessDenied:
+                print(f"Access denied to kill process with PID {self.pid}.")
             except Exception as e:
                 print(f"Error killing process: {e}")
         self.driver.quit()

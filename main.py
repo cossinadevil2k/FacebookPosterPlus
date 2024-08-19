@@ -79,7 +79,7 @@ def main():
     chunk_size_input = input(
         "Nhập kích thước phân chia UID (mặc định là 50): ")
     chunk_size = int(chunk_size_input) if chunk_size_input else 50
-    proxy = input('Nhập Proxy(Dạng IP:PORT)')
+    proxy = input('Nhập Proxy(Dạng IP:PORT):')
     cookies_list = read_lines_from_file(cookies_file)
     uids = read_uids_from_file(uids_file)
     message = read_content(content_file)
@@ -107,7 +107,7 @@ def main():
 
         quit_result = fb_chrome.quit()
         print(quit_result)
-        time.sleep(5)
+        # time.sleep(5)
 
 
 if __name__ == "__main__":
