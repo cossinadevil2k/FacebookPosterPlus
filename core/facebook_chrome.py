@@ -4,7 +4,6 @@ import signal
 from typing import Dict, List, Optional
 
 import psutil
-import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -13,7 +12,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 
 class FacebookChrome:
-    def __init__(self, username: str, password: str, cookies: str, key_2fa: Optional[str] = None, proxy: Optional[str] = None):
+    def __init__(self, cookies: str, proxy: Optional[str] = None):
         self.options = Options()
         self.base_url = 'https://mbasic.facebook.com'
         # self.options.add_argument('--headless')
@@ -41,11 +40,6 @@ class FacebookChrome:
 
         self.driver = webdriver.Chrome(options=self.options)
         self.driver.get(self.base_url)
-        cookie = {'name': 'locale', 'value': 'en_GB'}
-        self.driver.add_cookie(cookie)
-        self.username = username
-        self.password = password
-        self.key_2fa = key_2fa
         self.cookies = cookies
         self.pid = self._get_pid()
 
@@ -58,11 +52,6 @@ class FacebookChrome:
         except Exception as e:
             print(f"Error getting PID: {e}")
         return None
-    def _get_code_2fa(self, key_2fa: str) -> Optional[str]:
-        url = f"https://2fa.live/tok/{key_2fa}"
-        response = requests.get(url)
-        data = response.json()
-        return data.get("token")
 
     def _get_uid(self) -> Optional[str]:
         cookies = self.driver.get_cookies()
@@ -72,77 +61,35 @@ class FacebookChrome:
         self.driver.quit()
         return None
 
-    def get_cookies(self) -> Dict[str, str]:
-        cookies = self.driver.get_cookies()
-        return {cookie['name']: cookie['value'] for cookie in cookies}
+    def _gen_random_number(self) -> str:
+        return ''.join(random.choices('0123456789', k=6))
 
-    def login(self, login_with_cookie: bool = False) -> str:
+    def _parse_cookies(self, cookies_str: str) -> List[Dict[str, str]]:
+        cookies = []
+        for cookie in cookies_str.split(";"):
+            cookie = cookie.strip()
+            if "=" in cookie:
+                name, value = cookie.split("=", 1)
+                cookies.append({'name': name.strip(), 'value': value.strip()})
+        return cookies
+
+    def login(self) -> str:
         LOGIN_ERROR_MESSAGE = "LỖI ĐĂNG NHẬP"
-        if login_with_cookie:
-            try:
-                cookies = self.cookies.split(";")
-                for cookie in cookies:
-                    name, value = cookie.split("=")
-                    self.driver.add_cookie({'name': name.strip(), 'value': value.strip()})
-                self.driver.get(self.base_url)
-                feed_compose = WebDriverWait(self.driver, 5).until(
-                    EC.element_to_be_clickable(
-                        (By.ID, 'mbasic_inline_feed_composer'))
-                )
-                if feed_compose:
-                    return "ĐĂNG NHẬP THÀNH CÔNG"
-                else:
-                    return LOGIN_ERROR_MESSAGE
-            except Exception:
-                return "LỖI ĐĂNG NHẬP COOKIE. CHECK COOKIE LẠI"
-        else:
-            try:
-                self.driver.get(self.base_url)
-                username_input = self.driver.find_element(By.ID, 'm_login_email')
-                username_input.clear()
-                username_input.send_keys(self.username)
-                password_input = self.driver.find_element(By.NAME, 'pass')
-                password_input.clear()
-                password_input.send_keys(self.password)
-                login_button = self.driver.find_element(By.NAME, 'login')
-                login_button.click()
-                if f'{self.base_url}/login/' in self.driver.current_url:
-                    self.driver.quit()
-                    return LOGIN_ERROR_MESSAGE
-                if f'{self.base_url}/checkpoint/?_rdr' in self.driver.current_url:
-                    code_2fa = self._get_code_2fa(self.key_2fa or '')
-                    code_2fa_input = self.driver.find_element(
-                        By.NAME, 'approvals_code')
-                    code_2fa_input.clear()
-                    code_2fa_input.send_keys(code_2fa)
-                    try:
-                        submit_button = self.driver.find_element(
-                            By.NAME, 'submit[Submit Code]')
-                    except:
-                        return LOGIN_ERROR_MESSAGE
-                    submit_button.click()
-                    if f'{self.base_url}/login/checkpoint/' in self.driver.current_url:
-                        for i in range(10):
-                            if i == 9:
-                                self.driver.quit()
-                                return LOGIN_ERROR_MESSAGE
-                            try:
-                                this_was_me_button = self.driver.find_element(
-                                    By.NAME, 'submit[This was me]')
-                                this_was_me_button.click()
-                            except:
-                                pass
-                            try:
-                                submit_button = self.driver.find_element(
-                                    By.NAME, 'submit[Continue]')
-                            except:
-                                return LOGIN_ERROR_MESSAGE
-                            submit_button.click()
-                            if f'{self.base_url}/login/checkpoint/' not in self.driver.current_url:
-                                break
-            except:
+        try:
+            cookies = self._parse_cookies(self.cookies)
+            for cookie in cookies:
+                self.driver.add_cookie(cookie)
+            self.driver.get(self.base_url)
+            feed_compose = WebDriverWait(self.driver, 5).until(
+                EC.element_to_be_clickable(
+                    (By.ID, 'mbasic_inline_feed_composer'))
+            )
+            if feed_compose:
+                return "ĐĂNG NHẬP THÀNH CÔNG"
+            else:
                 return LOGIN_ERROR_MESSAGE
-            return "ĐĂNG NHẬP THÀNH CÔNG"
+        except Exception:
+            return "LỖI ĐĂNG NHẬP COOKIE. CHECK COOKIE LẠI"
 
     def change_avatar(self, image_path: str) -> str:
         if not image_path:
@@ -175,7 +122,8 @@ class FacebookChrome:
                 By.CSS_SELECTOR, 'a[aria-label="Only me"]')
             only_me_button.click()
             return "ĐỔI AVATAR THÀNH CÔNG"
-        except:
+        except Exception as e:
+            print(f"Lỗi: {e}")
             return "LỖI ĐỔI AVATAR KHÔNG THÀNH CÔNG"
 
     def post_status(self, message: str, uids: List[str]) -> str:
@@ -189,7 +137,7 @@ class FacebookChrome:
         for uid_ in uids:
             message = message + "\n" + f"@[{uid_[0]}:0]"
 
-        message = message + "\n" + f"#{random_numbers()}"
+        message = message + "\n" + f"#{self._gen_random_number()}"
 
         self.driver.get(f'{self.base_url}/{uid}')
         try:
@@ -241,7 +189,7 @@ class FacebookChrome:
                         WebDriverWait(self.driver, 2).until(
                             EC.element_to_be_clickable(
                                 (By.XPATH,
-                                '//div[@aria-label="Remove link preview from your post"]')
+                                 '//div[@aria-label="Remove link preview from your post"]')
                             )
                         )
 
@@ -251,13 +199,13 @@ class FacebookChrome:
                                 (By.XPATH, '//div[@aria-label="Save"]'))
                         )
                         save_button.click()
-            except:
-                print("Không có link để tắt preview.")
+            except Exception as e:
+                print(f"Lỗi: {e}")
                 return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
 
             return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
-        except:
-            # print(e)
+        except Exception as e:
+            print(f"Lỗi: {e}")
             return "LỖI ĐĂNG TRẠNG THÁI KHÔNG THÀNH CÔNG"
 
     def quit(self) -> str:
@@ -268,7 +216,3 @@ class FacebookChrome:
                 print(f"Error killing process: {e}")
         self.driver.quit()
         return "ĐÃ DỪNG LẠI"
-
-
-def random_numbers() -> str:
-    return ''.join(random.choices('0123456789', k=6))

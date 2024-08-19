@@ -1,27 +1,15 @@
-import base64
 import subprocess
-from io import BytesIO
-
-from PIL import Image
-
-from gui import base64_icon
-
-
-def base64_to_ico(base64_str, output_file):
-    image_data = base64.b64decode(base64_str)
-    image = Image.open(BytesIO(image_data))
-    image.save(output_file, format='ICO')
 
 
 def create_executable():
-    output_file = "icon.ico"
-    base64_to_ico(base64_icon, output_file)
+    icon = "icon.ico"
     pyinstaller_command = [
         'pyinstaller',
         '--noconfirm',
         '--onefile',
         '--windowed',
-        '--icon', output_file,
+        '--icon', icon,
+        '--add-data', f'{icon};.',
         'main.py'
     ]
     result = subprocess.run(pyinstaller_command,

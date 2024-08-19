@@ -79,6 +79,5 @@ dmypy.json
 cython_debug/
 output/
 *.png
-*.ico
 dist/
 build/
