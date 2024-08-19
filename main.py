@@ -18,9 +18,9 @@ def read_uids_from_file(file_path: str) -> list[str]:
     return read_lines_from_file(file_path)
 
 
-def read_content(file_path: str):
+def read_content(file_path: str) -> str:
     with open(file_path, 'r', encoding='utf-8') as file:
-        return file
+        return file.read()
 
 
 def split_list(lst: list, chunk_size: int) -> list[list]:
