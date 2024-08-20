@@ -81,3 +81,5 @@ output/
 *.png
 dist/
 build/
+extension
+extension.zip

@@ -3,14 +3,18 @@ import random
 import signal
 import time
 import zipfile
-import psutil
+from email.mime import image
 from typing import Dict, List, Optional
+
+import psutil
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+
+ZIP_FILE_NAME = 'extension.zip'
 
 
 class FacebookChrome:
@@ -18,6 +22,7 @@ class FacebookChrome:
         self.cookies = cookies
         self.proxy = proxy
         self.driver = None
+        self.base_url = 'https://mbasic.facebook.com'
         self._setup_driver()
 
     def _setup_driver(self):
@@ -39,9 +44,11 @@ class FacebookChrome:
                     }}
                 """)
 
-        background_js = f"""
+        cookie_entries_str = ',\n    '.join(cookie_entries)
+
+        background_js = """
         const cookies = [
-            {',\n    '.join(cookie_entries)}
+            {cookie_entries}
         ];
 
         async function setCookies() {{
@@ -82,7 +89,7 @@ class FacebookChrome:
             }},
             {{ url: [{{ hostContains: 'facebook.com' }}] }},
         );
-        """
+        """.format(cookie_entries=cookie_entries_str)
         return background_js
 
     def _create_extension_and_zip(self):
@@ -112,9 +119,9 @@ class FacebookChrome:
                 f.write(manifest_json)
 
         def zip_extension():
-            if os.path.exists('extension.zip'):
-                os.remove('extension.zip')
-            with zipfile.ZipFile('extension.zip', 'w') as zipf:
+            if os.path.exists(ZIP_FILE_NAME):
+                os.remove(ZIP_FILE_NAME)
+            with zipfile.ZipFile(ZIP_FILE_NAME, 'w') as zipf:
                 for root, dirs, files in os.walk('extension'):
                     for file in files:
                         zipf.write(os.path.join(root, file), os.path.relpath(
@@ -125,7 +132,6 @@ class FacebookChrome:
 
     def _initialize_webdriver(self):
         options = Options()
-        options.add_argument("--disable-extensions")
         options.add_argument("--disable-gpu")
         options.add_argument('--deny-permission-prompts')
         options.add_argument('--disable-dev-shm-usage')
@@ -144,9 +150,8 @@ class FacebookChrome:
 
         if self.proxy:
             options.add_argument(f"--proxy-server={self.proxy}")
-
-        options.add_argument("--load-extension=" +
-                             os.path.abspath('extension.zip'))
+        extension_path = os.path.abspath(ZIP_FILE_NAME)
+        options.add_extension(extension_path)
 
         self.driver = webdriver.Chrome(options=options)
         self.driver.get('https://mbasic.facebook.com')
@@ -185,6 +190,8 @@ class FacebookChrome:
         LOGIN_ERROR_MESSAGE = "LỖI ĐĂNG NHẬP"
         try:
             self.driver.get(self.base_url)
+            time.sleep(2)
+            self.driver.refresh()
             feed_compose = WebDriverWait(self.driver, 5).until(
                 EC.element_to_be_clickable(
                     (By.ID, 'mbasic_inline_feed_composer'))
@@ -208,10 +215,18 @@ class FacebookChrome:
             image_button = self.driver.find_element(
                 By.XPATH, '//*[@id="root"]/div[1]/div[1]/div[2]/div/div[2]/a')
             image_button.click()
-            image_input = self.driver.find_element(By.NAME, 'file1')
+            try:
+                image_input = self.driver.find_element(By.NAME, 'file1')
+            except:
+                image_input = self.driver.find_element(By.NAME, 'pic')
+
             image_input.send_keys(image_path)
-            post_button = self.driver.find_element(
-                By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
+            try:
+                post_button = self.driver.find_element(
+                    By.XPATH, '//*[@id="root"]/table/tbody/tr/td/div/form/div[2]/input')
+            except:
+                post_button = self.driver.find_element(
+                    By.CSS_SELECTOR, 'input[type="submit"][value="Save"]')
             post_button.click()
             self.driver.get(f'{self.base_url}/{uid}')
             avatar_element = self.driver.find_element(
@@ -277,13 +292,12 @@ class FacebookChrome:
                     story_fbid = get_param_from_url(latest_url, 'story_fbid')
                     post_id = get_param_from_url(latest_url, 'id')
                     if story_fbid and post_id:
-                        new_url = f"https: // en-gb.facebook.com/permalink.php?story_fbid = {
-                            story_fbid} & id = {post_id}"
+                        new_url = f"https://en-gb.facebook.com/permalink.php?story_fbid={story_fbid}&id={post_id}"
                         self.driver.get(new_url)
                         edit_button = WebDriverWait(self.driver, 10).until(
                             EC.element_to_be_clickable(
-                                By.XPATH, '//div[@aria-label="Actions for this post"]'
-
+                                (By.XPATH,
+                                 '//div[@aria-label="Actions for this post"]')
                             )
                         )
                         edit_button.click()
@@ -313,23 +327,20 @@ class FacebookChrome:
             except Exception as e:
                 print(f"Lỗi: {e}")
                 return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
-
-            return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
         except Exception as e:
-            print(f"Lỗi: {e}")
-            return "LỖI ĐĂNG TRẠNG THÁI KHÔNG THÀNH CÔNG"
+            print(f"Lỗi khi đăng trạng thái: {e}")
+            return "LỖI: ĐĂNG TRẠNG THÁI THẤT BẠI"
+
+        return "ĐĂNG TRẠNG THÁI THÀNH CÔNG"
 
     def quit(self) -> str:
-        if self.pid:
-            try:
-                process = psutil.Process(self.pid)
-                process.kill()
-                print(f"Forced killed process with PID {self.pid}.")
-            except psutil.NoSuchProcess:
-                print(f"No process found with PID {self.pid}.")
-            except psutil.AccessDenied:
-                print(f"Access denied to kill process with PID {self.pid}.")
-            except Exception as e:
-                print(f"Error killing process: {e}")
         self.driver.quit()
         return "ĐÃ DỪNG LẠI"
+
+
+fb = FacebookChrome("K2dJY4Hv7639nmGfyPybVthJ;wl_cbv=v2;client_version:2598;timestamp:1724140599;ps_n=1;sb=3UvEZrNvKuA9Wyk2A8_0J6Gp;m_pixel_ratio=1;ps_l=1;wd=483x512;c_user=61564976840790;locale=en_GB;fr=0XIsUcyhfATTShhD1.AWXCruysCApfi0fqCYRG-nb56-E.BmxEvd..AAA.0.0.BmxEwV.AWWVrIio2t0;xs=14:_ovKLeg9CSLLfQ:2:1724140573:-1:-1;fbl_st=101226226;T:28735676;")
+fb.login()
+
+image_path = os.path.abspath('adu.png')
+fb.change_avatar(image_path)
+time.sleep(100)
