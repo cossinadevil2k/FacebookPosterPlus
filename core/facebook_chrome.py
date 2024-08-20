@@ -336,11 +336,3 @@ class FacebookChrome:
     def quit(self) -> str:
         self.driver.quit()
         return "ĐÃ DỪNG LẠI"
-
-
-fb = FacebookChrome("K2dJY4Hv7639nmGfyPybVthJ;wl_cbv=v2;client_version:2598;timestamp:1724140599;ps_n=1;sb=3UvEZrNvKuA9Wyk2A8_0J6Gp;m_pixel_ratio=1;ps_l=1;wd=483x512;c_user=61564976840790;locale=en_GB;fr=0XIsUcyhfATTShhD1.AWXCruysCApfi0fqCYRG-nb56-E.BmxEvd..AAA.0.0.BmxEwV.AWWVrIio2t0;xs=14:_ovKLeg9CSLLfQ:2:1724140573:-1:-1;fbl_st=101226226;T:28735676;")
-fb.login()
-
-image_path = os.path.abspath('adu.png')
-fb.change_avatar(image_path)
-time.sleep(100)
