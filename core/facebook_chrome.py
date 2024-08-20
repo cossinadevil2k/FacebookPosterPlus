@@ -229,8 +229,12 @@ class FacebookChrome:
                     By.CSS_SELECTOR, 'input[type="submit"][value="Save"]')
             post_button.click()
             self.driver.get(f'{self.base_url}/{uid}')
-            avatar_element = self.driver.find_element(
-                By.XPATH, '//img[contains(@src, "https://scontent.") and contains(@class, "bt") and contains(@class, "img")]')
+            try:
+                avatar_element = self.driver.find_element(
+                    By.XPATH, '//img[contains(@src, "https://scontent.") and contains(@class, "bt") and contains(@class, "img")]')
+            except:
+                avatar_element = self.driver.find_element(
+                    By.XPATH, '//*[@id="u_0_0_S/"]/div/div/img')
             avatar_element.click()
             privacy_buton = self.driver.find_element(
                 By.XPATH, '//a[contains(@href, "/privacyx/selector")]')
